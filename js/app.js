@@ -301,14 +301,20 @@ function buildMix(mat, opts) {
   // замедлитель — часть растворителя, а не добавка сверх него
   const rRatio = ret ? Math.min(ret.ratio, tRatio || ret.ratio) : 0;
   const pureThinnerRatio = Math.max(0, tRatio - rRatio);
+  // Материал может идти без разбавления (доля 0), но замедлитель при жаре
+  // всё равно добавляется — считаем фактический растворитель, иначе
+  // в режиме площади сумма превысит расход.
+  const solventRatio = pureThinnerRatio + rRatio;
 
   // Основа
   let baseG;
   if (opts.mode === 'area') {
-    // Расход г/м² относится к НАНОСИМОМУ материалу (основа + отвердитель + ускоритель).
-    // Разбавитель испаряется и в расход не входит.
-    const applied = mat.coverage * opts.area * (1 + opts.reserve / 100);
-    baseG = applied / (1 + hRatio / 100 + aRatio / 100);
+    // Расход г/м² в каталоге стоит в строке «Способ нанесения» — это расход
+    // ГОТОВОЙ РАБОЧЕЙ СМЕСИ, всего что проходит через краскопульт.
+    // (Где имеется в виду только основа, каталог пишет «часть А».)
+    // Поэтому подбираем основу так, чтобы вся смесь дала нужный расход.
+    const mixNeeded = mat.coverage * opts.area * (1 + opts.reserve / 100);
+    baseG = mixNeeded / (1 + hRatio / 100 + solventRatio / 100 + aRatio / 100);
   } else {
     baseG = opts.quantity * UNIT_MUL[opts.unit];
   }
@@ -330,7 +336,7 @@ function buildMix(mat, opts) {
     hardenerId, thinnerId,
     acceleratorId: aRatio ? mat.accelerators[0].id : '',
     retarderId: rRatio ? ret.id : '',
-    coveredArea: mat.coverage ? appliedG / mat.coverage : null,
+    coveredArea: mat.coverage ? totalG / mat.coverage : null,
   };
 }
 
@@ -424,9 +430,9 @@ function renderResult(r) {
     </div>
 
     ${r.mode === 'area' ? `<div class="result-note">
-      Расход <b>${mat.coverage} г/м²</b> относится к наносимому материалу
-      (основа + отвердитель${r.accelerator > 0 ? ' + ускоритель' : ''}) — это <b>${fmt(r.applied)} г</b>.
-      Разбавитель испаряется и в расход не входит, поэтому итог смеси больше.
+      Расход <b>${mat.coverage} г/м²</b> по каталогу — это готовая рабочая смесь
+      целиком. ${trim(r.area)} м² × ${mat.coverage} г/м²${r.reserve ? ` + ${r.reserve}% запаса` : ''}
+      = <b>${fmt(r.total)} г</b> смеси, которую и разложили на компоненты.
     </div>` : ''}
 
     <div class="result-actions">
@@ -478,7 +484,7 @@ function updateCoverageInfo() {
       mode: 'area', hardenerId: State.calc.hardenerId, thinnerId: State.calc.thinnerId,
       temp: State.calc.temperature, area: State.calc.area, reserve: State.calc.reserve,
     });
-    parts.push(`на ${trim(State.calc.area)} м² нужно <b>${fmt(mix.applied)} г</b> материала`);
+    parts.push(`на ${trim(State.calc.area)} м² нужно <b>${fmt(mix.total)} г</b> смеси`);
   }
 
   if (!parts.length) { el.hidden = true; return; }
