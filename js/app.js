@@ -1,875 +1,798 @@
 // ============================================================
-//  Маляр Калькулятор — Основная логика
+//  Маляр Калькулятор — основная логика
+//
+//  ГЛАВНОЕ ПРАВИЛО РАСЧЁТА:
+//  все доли считаются ОТ ОСНОВНОГО КОМПОНЕНТА (основа = 100%).
+//    отвердитель = основа × ratio%
+//    разбавитель = основа × ratio%
+//  Пример PTS20700: 100 г основы → 50 г PC20 (50%) → 20 г S50 (20%).
 // ============================================================
 
 'use strict';
 
-// ====== СОСТОЯНИЕ ПРИЛОЖЕНИЯ ======
-const State = {
-  tab: 'calc',
-  calc: {
-    mode: 'quantity', // 'quantity' | 'area'
-    manufacturer: 'technocolor',
-    materialId: '',
-    hardenerId: '',
-    thinnerIds: [],
-    quantity: 100,
-    unit: 'g',
-    area: 1,
-    reserve: 10,
-    temperature: 20,
-  },
-  lib: {
-    filter: 'all',
-    search: '',
-  },
-  result: null,
-};
-
-// ====== КОНСТАНТЫ ======
 const HISTORY_KEY = 'paintCalc_history';
-const HISTORY_TTL = 30 * 24 * 60 * 60 * 1000; // 30 дней
+const HISTORY_TTL = 30 * 24 * 60 * 60 * 1000;
+const THEME_KEY = 'paintCalc_theme';
 
 const TYPE_LABELS = {
-  primer: 'Грунт',
-  lacquer: 'Лак',
-  enamel: 'Эмаль',
-  dye: 'Краситель/Морилка',
-  converter: 'Конвертер',
+  primer: 'Грунт', lacquer: 'Лак', enamel: 'Эмаль',
+  dye: 'Краситель', converter: 'Конвертер',
 };
 
 const CHEM_LABELS = {
-  pu: 'ПУ',
-  'pu-ac': 'ПУ (алиф.)',
-  ac: 'Акриловый',
-  pe: 'Полиэфирный',
-  wb: 'Водоразбавимый',
-  solvent: 'На растворителе',
-  alkyd: 'Алкидный',
-  '1k': '1К',
+  pu: 'ПУ', 'pu-ac': 'ПУ алиф.', ac: 'Акрил', pe: 'Полиэфир',
+  wb: 'Водный', solvent: 'Растворитель', alkyd: 'Алкид', '1k': '1К',
+};
+
+// Короткие метки для значка в библиотеке (умещаются в 40px)
+const CHEM_SHORT = {
+  pu: 'ПУ', 'pu-ac': 'ПУА', ac: 'АК', pe: 'ПЭ',
+  wb: 'ВД', solvent: 'Р-ЛЬ', alkyd: 'АЛК', '1k': '1К',
 };
 
 const UNIT_MUL = { g: 1, kg: 1000, l: 1000 };
+const UNIT_LABEL = { g: 'г', kg: 'кг', l: 'л' };
 
-// ====== ИНИЦИАЛИЗАЦИЯ ======
+const State = {
+  calc: {
+    mode: 'quantity',
+    manufacturer: '', materialId: '', hardenerId: '', thinnerId: '',
+    quantity: 100, unit: 'g',
+    area: 2, reserve: 10, temperature: 20,
+  },
+  lib: { filter: 'all', search: '' },
+  result: null,
+};
+
+// ====== ЗАПУСК ======
 document.addEventListener('DOMContentLoaded', () => {
-  initNavigation();
+  initTheme();
+  initNav();
   initCalc();
   initLibrary();
+  initHistory();
+  initInstall();
   renderHistory();
   registerSW();
 });
 
-// ====== НАВИГАЦИЯ ======
-function initNavigation() {
-  document.querySelectorAll('.nav-btn').forEach(btn => {
-    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+// ====== ТЕМА ======
+function initTheme() {
+  const saved = safeGet(THEME_KEY);
+  if (saved) document.documentElement.dataset.theme = saved;
+  document.getElementById('theme-btn').addEventListener('click', () => {
+    const cur = document.documentElement.dataset.theme;
+    const isDark = cur ? cur === 'dark'
+      : matchMedia('(prefers-color-scheme: dark)').matches;
+    const next = isDark ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    safeSet(THEME_KEY, next);
   });
 }
 
+// ====== НАВИГАЦИЯ ======
+function initNav() {
+  document.querySelectorAll('.nav-btn').forEach(btn =>
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+}
+
 function switchTab(name) {
-  State.tab = name;
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   document.querySelector(`.nav-btn[data-tab="${name}"]`).classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   if (name === 'history') renderHistory();
   if (name === 'library') renderLibrary();
 }
 
-// ====== КАЛЬКУЛЯТОР ======
+// ====== КАЛЬКУЛЯТОР: ИНИЦИАЛИЗАЦИЯ ======
 function initCalc() {
-  // Кнопки режима
-  document.querySelectorAll('.mode-btn').forEach(btn => {
+  const seg = document.getElementById('mode-seg');
+  seg.querySelectorAll('.seg-btn').forEach((btn, i) => {
     btn.addEventListener('click', () => {
       State.calc.mode = btn.dataset.mode;
-      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      seg.dataset.active = String(i);
+      seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      document.getElementById('mode-quantity').style.display = btn.dataset.mode === 'quantity' ? '' : 'none';
-      document.getElementById('mode-area').style.display = btn.dataset.mode === 'area' ? '' : 'none';
-      clearResult();
+      // hidden-атрибут, а не style.display — иначе карточка не покажется
+      document.getElementById('mode-quantity').hidden = btn.dataset.mode !== 'quantity';
+      document.getElementById('mode-area').hidden = btn.dataset.mode !== 'area';
+      updateCoverageInfo();
     });
   });
 
-  // Производитель
-  const mfSelect = document.getElementById('calc-manufacturer');
-  mfSelect.addEventListener('change', () => {
-    State.calc.manufacturer = mfSelect.value;
-    populateMaterials();
-    clearResult();
-  });
   populateManufacturers();
+  populateMaterials();
 
-  // Материал
-  const matSelect = document.getElementById('calc-material');
-  matSelect.addEventListener('change', () => {
-    State.calc.materialId = matSelect.value;
+  document.getElementById('calc-manufacturer').addEventListener('change', e => {
+    State.calc.manufacturer = e.target.value;
+    populateMaterials();
+  });
+
+  document.getElementById('calc-material').addEventListener('change', e => {
+    State.calc.materialId = e.target.value;
     populateHardeners();
     populateThinners();
     updateCoverageInfo();
-    clearResult();
-  });
-  populateMaterials();
-
-  // Отвердитель
-  document.getElementById('calc-hardener').addEventListener('change', function() {
-    State.calc.hardenerId = this.value;
-    clearResult();
+    updateAdjustments();
   });
 
-  // Разбавитель
-  document.getElementById('calc-thinner').addEventListener('change', function() {
-    State.calc.thinnerIds = [this.value];
-    clearResult();
-  });
-
-  // Температура
-  const tempInput = document.getElementById('calc-temp');
-  tempInput.addEventListener('input', () => {
-    const v = parseFloat(tempInput.value);
-    if (!isNaN(v)) {
-      State.calc.temperature = v;
-      updateTempChips(v);
-      clearResult();
-    }
-  });
-  document.querySelectorAll('.temp-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      const t = parseInt(chip.dataset.temp);
-      State.calc.temperature = t;
-      tempInput.value = t;
-      updateTempChips(t);
-      clearResult();
-    });
-  });
-
-  // Количество / ед. изм.
-  document.getElementById('calc-quantity').addEventListener('input', function() {
-    State.calc.quantity = parseFloat(this.value) || 0;
-    clearResult();
-  });
-  document.querySelectorAll('.unit-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      State.calc.unit = btn.dataset.unit;
-      document.querySelectorAll('.unit-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      clearResult();
-    });
-  });
-
-  // Площадь
-  document.getElementById('calc-area').addEventListener('input', function() {
-    State.calc.area = parseFloat(this.value) || 0;
+  document.getElementById('calc-hardener').addEventListener('change', e => {
+    State.calc.hardenerId = e.target.value;
     updateCoverageInfo();
-    clearResult();
+  });
+  document.getElementById('calc-thinner').addEventListener('change', e => {
+    State.calc.thinnerId = e.target.value;
   });
 
-  // Запас
-  document.querySelectorAll('.reserve-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      State.calc.reserve = parseInt(btn.dataset.reserve);
-      document.querySelectorAll('.reserve-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      clearResult();
-    });
+  bindNumber('calc-quantity', v => { State.calc.quantity = v; });
+  bindNumber('calc-area', v => { State.calc.area = v; updateCoverageInfo(); });
+  bindNumber('calc-temp', v => {
+    State.calc.temperature = v;
+    syncTempChips(v);
+    updateZonePill(v);
+    updateAdjustments();
+    updateCoverageInfo();
   });
 
-  // Кнопка расчёта
+  bindChips('[data-unit]', btn => {
+    State.calc.unit = btn.dataset.unit;
+    document.getElementById('unit-label').textContent = UNIT_LABEL[btn.dataset.unit];
+  });
+  bindChips('[data-reserve]', btn => {
+    State.calc.reserve = Number(btn.dataset.reserve);
+    updateCoverageInfo();
+  });
+  bindChips('[data-temp]', btn => {
+    const t = Number(btn.dataset.temp);
+    State.calc.temperature = t;
+    document.getElementById('calc-temp').value = t;
+    updateZonePill(t);
+    updateAdjustments();
+    updateCoverageInfo();
+  });
+
   document.getElementById('calc-btn').addEventListener('click', calculate);
-
-  // Кнопка сохранения
-  document.getElementById('save-btn').addEventListener('click', saveToHistory);
+  updateZonePill(State.calc.temperature);
 }
 
+function bindNumber(id, cb) {
+  document.getElementById(id).addEventListener('input', function () {
+    const v = parseFloat(this.value);
+    if (!isNaN(v)) cb(v);
+  });
+}
+
+function bindChips(selector, cb) {
+  const nodes = document.querySelectorAll(selector);
+  nodes.forEach(btn => btn.addEventListener('click', () => {
+    nodes.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    cb(btn);
+  }));
+}
+
+// ====== СПИСКИ ======
 function populateManufacturers() {
   const sel = document.getElementById('calc-manufacturer');
-  const manufacturers = getAllManufacturers();
-  sel.innerHTML = manufacturers.map(m =>
-    `<option value="${m.id}">${m.name}</option>`
-  ).join('');
+  const list = getAllManufacturers();
+  sel.innerHTML = '<option value="">Все производители</option>' +
+    list.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
+  sel.value = State.calc.manufacturer;
 }
 
 function populateMaterials() {
   const sel = document.getElementById('calc-material');
-  const mfId = State.calc.manufacturer;
-  const materials = getAllMaterials().filter(m => m.manufacturer === mfId);
+  let list = getAllMaterials();
+  if (State.calc.manufacturer) list = list.filter(m => m.manufacturer === State.calc.manufacturer);
 
-  const grouped = {};
-  materials.forEach(m => {
-    const group = TYPE_LABELS[m.type] || m.type;
-    if (!grouped[group]) grouped[group] = [];
-    grouped[group].push(m);
+  const groups = {};
+  list.forEach(m => {
+    const g = TYPE_LABELS[m.type] || m.type;
+    (groups[g] = groups[g] || []).push(m);
   });
 
-  sel.innerHTML = '<option value="">— выберите материал —</option>';
-  Object.entries(grouped).forEach(([group, items]) => {
-    const og = document.createElement('optgroup');
-    og.label = group;
-    items.forEach(m => {
-      const opt = document.createElement('option');
-      opt.value = m.id;
-      opt.textContent = m.code + ' — ' + getShortName(m.name, m.code);
-      og.appendChild(opt);
-    });
-    sel.appendChild(og);
-  });
+  sel.innerHTML = '<option value="">— Выберите материал —</option>' +
+    Object.entries(groups).map(([g, items]) =>
+      `<optgroup label="${esc(g)}">` +
+      items.map(m => `<option value="${esc(m.id)}">${esc(m.code)} — ${esc(getShortName(m.name, m.code))}</option>`).join('') +
+      '</optgroup>').join('');
 
-  State.calc.materialId = '';
+  if (list.some(m => m.id === State.calc.materialId)) {
+    sel.value = State.calc.materialId;
+  } else {
+    State.calc.materialId = '';
+  }
   populateHardeners();
   populateThinners();
   updateCoverageInfo();
 }
 
-function getShortName(name, code) {
-  // Убираем код из начала имени
-  return name.replace(new RegExp('^' + code + '\\s*[—-]\\s*'), '').trim();
-}
-
-function getMaterial() {
-  if (!State.calc.materialId) return null;
-  return getAllMaterials().find(m => m.id === State.calc.materialId);
-}
-
 function populateHardeners() {
   const sel = document.getElementById('calc-hardener');
   const mat = getMaterial();
-  if (!mat || !mat.hardeners || mat.hardeners.length === 0) {
-    sel.innerHTML = '<option value="">Не требуется</option>';
+  const list = mat ? (mat.hardeners || []) : [];
+
+  if (!list.length) {
+    sel.innerHTML = '<option value="">не требуется</option>';
     sel.disabled = true;
     State.calc.hardenerId = '';
     return;
   }
   sel.disabled = false;
-  sel.innerHTML = mat.hardeners.map(h => {
-    const hd = HARDENERS[h.id] || { name: h.id, description: '' };
-    const ratio = h.ratio ? `${h.ratio}%` : `${h.ratioMin}-${h.ratioMax}%`;
-    return `<option value="${h.id}">${hd.name} — ${ratio} (${hd.description.substring(0, 40)})</option>`;
+  sel.innerHTML = list.map(h => {
+    const info = HARDENERS[h.id];
+    return `<option value="${esc(h.id)}">${esc(h.id)} · ${ratioOf(h)}%${info ? ' — ' + esc(info.name) : ''}</option>`;
   }).join('');
-  State.calc.hardenerId = mat.hardeners[0].id;
+
+  // при жаре для полиэфира по умолчанию медленный EC2
+  let pick = list[0].id;
+  if (mat.chemistry === 'pe' && getTempZone(State.calc.temperature) !== 'cold') {
+    const slow = list.find(h => h.id === 'EC2');
+    if (slow) pick = slow.id;
+  }
+  State.calc.hardenerId = pick;
+  sel.value = pick;
 }
 
 function populateThinners() {
   const sel = document.getElementById('calc-thinner');
   const mat = getMaterial();
-  if (!mat || !mat.thinners || mat.thinners.length === 0) {
-    sel.innerHTML = '<option value="">Не требуется</option>';
+  const list = mat ? (mat.thinners || []) : [];
+
+  if (!list.length) {
+    sel.innerHTML = '<option value="">не требуется</option>';
     sel.disabled = true;
-    State.calc.thinnerIds = [];
+    State.calc.thinnerId = '';
     return;
   }
   sel.disabled = false;
-  sel.innerHTML = mat.thinners.map(t => {
-    const td = THINNERS[t.id] || { name: t.id, description: '' };
-    const ratio = t.ratio ? `${t.ratio}%` : `${t.ratioMin}-${t.ratioMax}%`;
-    return `<option value="${t.id}">${td.name} — ${ratio} разбавления</option>`;
+  sel.innerHTML = '<option value="">без разбавителя</option>' + list.map(t => {
+    const info = THINNERS[t.id];
+    return `<option value="${esc(t.id)}">${esc(t.id)} · ${rangeText(t)}${info ? ' — ' + esc(info.name) : ''}</option>`;
   }).join('');
-  State.calc.thinnerIds = [mat.thinners[0].id];
+  State.calc.thinnerId = list[0].id;
+  sel.value = list[0].id;
 }
 
-function updateCoverageInfo() {
-  const mat = getMaterial();
-  const el = document.getElementById('coverage-info');
-  if (!mat || !mat.coverage) {
-    el.hidden = true;
-    return;
+// ====== ПРОПОРЦИИ ======
+// Рабочая доля = ratio, либо НИЖНЯЯ граница диапазона (не среднее!).
+function ratioOf(info) {
+  if (!info) return 0;
+  if (info.ratio != null) return info.ratio;
+  if (info.ratioMin != null) return info.ratioMin;
+  return 0;
+}
+
+function rangeText(info) {
+  if (!info) return '';
+  if (info.ratio != null) return info.ratio + '%';
+  if (info.ratioMin === info.ratioMax || info.ratioMax == null) return info.ratioMin + '%';
+  return info.ratioMin + '–' + info.ratioMax + '%';
+}
+
+function getMaterial() {
+  return getAllMaterials().find(m => m.id === State.calc.materialId) || null;
+}
+
+// Доля ускорителя EA1 (только полиэфирные): при >30°C снижается до 1%.
+function accelRatio(mat, temp) {
+  if (mat.chemistry !== 'pe' || !mat.accelerators || !mat.accelerators.length) return 0;
+  return temp > 30 ? 1 : mat.accelerators[0].ratio;
+}
+
+function retarderInfo(mat, temp) {
+  const adj = getTempAdjustments(mat, temp).find(a => a.type === 'retarder');
+  return adj ? { id: adj.retarder, ratio: adj.ratioMin } : null;
+}
+
+// ====== ЯДРО РАСЧЁТА ======
+function buildMix(mat, opts) {
+  const { hardenerId, thinnerId, temp } = opts;
+
+  const hInfo = hardenerId ? (mat.hardeners || []).find(h => h.id === hardenerId) : null;
+  const tInfo = thinnerId ? (mat.thinners || []).find(t => t.id === thinnerId) : null;
+
+  const hRatio = ratioOf(hInfo);
+  const tRatio = ratioOf(tInfo);
+  const aRatio = accelRatio(mat, temp);
+  const ret = retarderInfo(mat, temp);
+  // замедлитель — часть растворителя, а не добавка сверх него
+  const rRatio = ret ? Math.min(ret.ratio, tRatio || ret.ratio) : 0;
+  const pureThinnerRatio = Math.max(0, tRatio - rRatio);
+
+  // Основа
+  let baseG;
+  if (opts.mode === 'area') {
+    // Расход г/м² относится к НАНОСИМОМУ материалу (основа + отвердитель + ускоритель).
+    // Разбавитель испаряется и в расход не входит.
+    const applied = mat.coverage * opts.area * (1 + opts.reserve / 100);
+    baseG = applied / (1 + hRatio / 100 + aRatio / 100);
+  } else {
+    baseG = opts.quantity * UNIT_MUL[opts.unit];
   }
-  const area = State.calc.area;
-  const totalMix = mat.coverage * area;
-  const withReserve = Math.ceil(totalMix * (1 + State.calc.reserve / 100));
 
-  el.hidden = false;
-  el.innerHTML = `Расход материала: <span class="coverage-value">${mat.coverage} г/м²</span> ·
-    Для ${area} м²: <span class="coverage-value">${totalMix} г</span> смеси`;
+  // Все компоненты — процент ОТ ОСНОВЫ
+  const hardenerG = baseG * hRatio / 100;
+  const acceleratorG = baseG * aRatio / 100;
+  const retarderG = baseG * rRatio / 100;
+  const thinnerG = baseG * pureThinnerRatio / 100;
+
+  const appliedG = baseG + hardenerG + acceleratorG;
+  const totalG = appliedG + thinnerG + retarderG;
+
+  return {
+    base: baseG, hardener: hardenerG, thinner: thinnerG,
+    accelerator: acceleratorG, retarder: retarderG,
+    applied: appliedG, total: totalG,
+    hRatio, tRatio: pureThinnerRatio, aRatio, rRatio,
+    hardenerId, thinnerId,
+    acceleratorId: aRatio ? mat.accelerators[0].id : '',
+    retarderId: rRatio ? ret.id : '',
+    coveredArea: mat.coverage ? appliedG / mat.coverage : null,
+  };
 }
 
-function updateTempChips(temp) {
-  document.querySelectorAll('.temp-chip').forEach(chip => {
-    const t = parseInt(chip.dataset.temp);
-    chip.classList.toggle('active', t === temp);
-  });
-  // Zone highlight
-  let zone = getTempZone(temp);
-  document.querySelectorAll('.temp-chip').forEach(chip => {
-    chip.classList.remove('zone-active');
-    if (chip.dataset.zone === zone) chip.classList.add('active');
-  });
-}
-
-// ====== РАСЧЁТ ======
 function calculate() {
   const mat = getMaterial();
-  if (!mat) {
-    showToast('Выберите материал для расчёта');
-    return;
+  if (!mat) { showToast('Сначала выберите материал'); return; }
+
+  const c = State.calc;
+  if (c.mode === 'area') {
+    if (!mat.coverage) { showToast('Для этого материала расход не указан — считайте по массе'); return; }
+    if (!(c.area > 0)) { showToast('Укажите площадь'); return; }
+  } else if (!(c.quantity > 0)) {
+    showToast('Укажите количество'); return;
   }
 
-  const temp = State.calc.temperature;
-  const hardenerId = State.calc.hardenerId;
-  const thinnerId = State.calc.thinnerIds[0];
+  const mix = buildMix(mat, {
+    mode: c.mode, hardenerId: c.hardenerId, thinnerId: c.thinnerId,
+    temp: c.temperature, quantity: c.quantity, unit: c.unit,
+    area: c.area, reserve: c.reserve,
+  });
 
-  // Базовое количество (в граммах)
-  let baseG;
-  if (State.calc.mode === 'area') {
-    if (!mat.coverage) {
-      showToast('Для этого материала расход не указан. Используйте режим "По количеству".');
-      return;
-    }
-    const area = State.calc.area;
-    if (!area || area <= 0) {
-      showToast('Укажите площадь');
-      return;
-    }
-    const totalMixNeeded = mat.coverage * area * (1 + State.calc.reserve / 100);
-    // Разбиваем totalMix на компоненты
-    // Нам нужно найти base такое, чтобы base + hardener + thinner = totalMix
-    baseG = computeBaseFromTotal(mat, hardenerId, thinnerId, totalMixNeeded, temp);
-  } else {
-    const qty = State.calc.quantity;
-    if (!qty || qty <= 0) {
-      showToast('Укажите количество');
-      return;
-    }
-    baseG = qty * UNIT_MUL[State.calc.unit];
-  }
-
-  // Получаем пропорции
-  const hInfo = hardenerId ? mat.hardeners.find(h => h.id === hardenerId) : null;
-  const tInfo = thinnerId ? mat.thinners.find(t => t.id === thinnerId) : null;
-
-  // Отвердитель
-  let hardenerG = 0;
-  if (hInfo) {
-    const ratio = hInfo.ratio || ((hInfo.ratioMin + hInfo.ratioMax) / 2);
-    hardenerG = baseG * ratio / 100;
-  }
-
-  // Разбавитель
-  let thinnerRatio = 0;
-  if (tInfo) {
-    thinnerRatio = tInfo.ratio || ((tInfo.ratioMin + tInfo.ratioMax) / 2);
-  }
-  let thinnerG = baseG * thinnerRatio / 100;
-
-  // Ускоритель (ПЭ)
-  let acceleratorG = 0;
-  let acceleratorId = '';
-  if (mat.chemistry === 'pe' && mat.accelerators && mat.accelerators.length > 0) {
-    const acc = mat.accelerators[0];
-    const accRatio = (temp > 30) ? 1 : acc.ratio;
-    acceleratorG = baseG * accRatio / 100;
-    acceleratorId = acc.id;
-  }
-
-  // Замедлитель
-  let retarderG = 0;
-  const tempAdj = getTempAdjustments(mat, temp);
-  const retarderAdj = tempAdj.find(a => a.type === 'retarder');
-  if (retarderAdj) {
-    const retarderRatio = (retarderAdj.ratioMin + retarderAdj.ratioMax) / 2;
-    retarderG = baseG * retarderRatio / 100;
-    // Замедлитель заменяет часть разбавителя
-    thinnerG = Math.max(0, thinnerG - retarderG);
-  }
-
-  const totalG = baseG + hardenerG + thinnerG + acceleratorG + retarderG;
-
-  // Площадь покрытия (при режиме quantity)
-  let coveredArea = null;
-  if (State.calc.mode === 'quantity' && mat.coverage) {
-    coveredArea = (totalG / mat.coverage).toFixed(2);
-  }
-
-  const result = {
-    material: mat,
-    hardenerId,
-    thinnerId,
-    temp,
-    base: baseG,
-    hardener: hardenerG,
-    thinner: thinnerG,
-    accelerator: acceleratorG,
-    acceleratorId,
-    retarder: retarderG,
-    retarderId: retarderAdj ? retarderAdj.retarder : '',
-    total: totalG,
-    coveredArea,
-    mode: State.calc.mode,
-    area: State.calc.area,
-    reserve: State.calc.reserve,
-    adjustments: tempAdj,
-    timestamp: Date.now(),
+  State.result = {
+    ...mix, material: mat, mode: c.mode, temp: c.temperature,
+    area: c.area, reserve: c.reserve, timestamp: Date.now(),
   };
-
-  State.result = result;
-  renderResult(result);
+  renderResult(State.result);
+  saveToHistory(State.result);
 }
 
-function computeBaseFromTotal(mat, hardenerId, thinnerId, totalMix, temp) {
-  // base + base*hRatio/100 + base*tRatio/100 [+ base*accRatio/100] = totalMix
-  const hInfo = hardenerId ? mat.hardeners.find(h => h.id === hardenerId) : null;
-  const tInfo = thinnerId ? mat.thinners.find(t => t.id === thinnerId) : null;
-
-  const hRatio = hInfo ? (hInfo.ratio || ((hInfo.ratioMin + hInfo.ratioMax) / 2)) : 0;
-  const tRatio = tInfo ? (tInfo.ratio || ((tInfo.ratioMin + tInfo.ratioMax) / 2)) : 0;
-  let accRatio = 0;
-  if (mat.chemistry === 'pe' && mat.accelerators && mat.accelerators.length > 0) {
-    accRatio = (temp > 30) ? 1 : mat.accelerators[0].ratio;
-  }
-
-  // Замедлитель: добавляет к пропорции
-  const tempAdj = getTempAdjustments(mat, temp);
-  const retAdj = tempAdj.find(a => a.type === 'retarder');
-  const retRatio = retAdj ? (retAdj.ratioMin + retAdj.ratioMax) / 2 : 0;
-
-  const divisor = 1 + hRatio/100 + tRatio/100 + accRatio/100 + retRatio/100;
-  return totalMix / divisor;
-}
-
+// ====== ВЫВОД РЕЗУЛЬТАТА ======
 function renderResult(r) {
   const el = document.getElementById('calc-result');
-  el.hidden = false;
-  el.classList.add('fade-in');
-
-  const fmt = g => g >= 1000 ? (g/1000).toFixed(2) + ' кг' : Math.round(g) + ' г';
-  const fmtVal = g => Math.round(g);
-
   const mat = r.material;
-  const chemLabel = CHEM_LABELS[mat.chemistry] || mat.chemistry;
 
-  // Определяем жизнеспособность
-  const potLifeNote = mat.chemistry === 'pe' ?
-    '⚠️ Жизнеспособность смеси: 15-30 минут. Готовьте небольшими порциями!' :
-    mat.chemistry === 'pu' || mat.chemistry === 'pu-ac' ? '⏱ Жизнеспособность: 45-60 минут.' : '';
+  const rows = [
+    { c: 'base', name: mat.code, sub: 'основной компонент', g: r.base, formula: '100% (основа)' },
+  ];
+  if (r.hardener > 0) rows.push({
+    c: 'hardener', name: 'Отвердитель ' + r.hardenerId, g: r.hardener,
+    formula: `${fmt(r.base)} × ${r.hRatio}% = ${fmt(r.hardener)}`,
+  });
+  if (r.accelerator > 0) rows.push({
+    c: 'accelerator', name: 'Ускоритель ' + r.acceleratorId, g: r.accelerator,
+    formula: `${fmt(r.base)} × ${r.aRatio}% = ${fmt(r.accelerator)}`,
+  });
+  if (r.thinner > 0) rows.push({
+    c: 'thinner', name: 'Разбавитель ' + r.thinnerId, g: r.thinner,
+    formula: `${fmt(r.base)} × ${r.tRatio}% = ${fmt(r.thinner)}`,
+  });
+  if (r.retarder > 0) rows.push({
+    c: 'retarder', name: 'Замедлитель ' + r.retarderId, g: r.retarder,
+    formula: `${fmt(r.base)} × ${r.rRatio}% = ${fmt(r.retarder)}`,
+  });
 
-  let html = `
-  <div class="result-card">
-    <div class="result-title">Результат расчёта</div>
-    <div class="result-material-name">${mat.code}</div>
-    <div style="font-size:13px;opacity:0.8;margin-bottom:12px;">${getShortName(mat.name, mat.code)}</div>`;
+  const bar = rows.map(x =>
+    `<div class="comp-seg" data-c="${x.c}" style="width:${(x.g / r.total * 100).toFixed(2)}%"></div>`).join('');
 
-  if (r.mode === 'area') {
-    html += `<div style="font-size:13px;opacity:0.8;margin-bottom:12px;">
-      Площадь: ${r.area} м² · Запас: ${r.reserve}% · Расход: ${mat.coverage} г/м²
-    </div>`;
-  }
+  const heroSub = r.mode === 'area'
+    ? `${trim(r.area)} м² · расход ${mat.coverage} г/м²${r.reserve ? ' · запас ' + r.reserve + '%' : ''}`
+    : `${trim(r.base >= 1000 ? r.base / 1000 : r.base)} ${r.base >= 1000 ? 'кг' : 'г'} основы${r.coveredArea ? ' · хватит на ' + trim(r.coveredArea.toFixed(2)) + ' м²' : ''}`;
 
-  html += `<div class="result-rows">
-    <div class="result-row">
-      <div class="result-row-icon">🪣</div>
-      <div class="result-row-label">Основа <span style="opacity:0.7;font-size:11px;">${mat.code}</span></div>
-      <div><span class="result-row-value">${fmtVal(r.base)}</span> <span class="result-row-unit">г</span></div>
-    </div>`;
-
-  if (r.hardener > 0) {
-    const hd = HARDENERS[r.hardenerId] || { name: r.hardenerId };
-    html += `<div class="result-row">
-      <div class="result-row-icon">⚗️</div>
-      <div class="result-row-label">Отвердитель <span style="opacity:0.7;font-size:11px;">${hd.name}</span></div>
-      <div><span class="result-row-value">${fmtVal(r.hardener)}</span> <span class="result-row-unit">г</span></div>
-    </div>`;
-  }
-
-  if (r.thinner > 0) {
-    const td = THINNERS[r.thinnerId] || { name: r.thinnerId };
-    html += `<div class="result-row">
-      <div class="result-row-icon">💧</div>
-      <div class="result-row-label">Разбавитель <span style="opacity:0.7;font-size:11px;">${td.name}</span></div>
-      <div><span class="result-row-value">${fmtVal(r.thinner)}</span> <span class="result-row-unit">г</span></div>
-    </div>`;
-  }
-
-  if (r.accelerator > 0) {
-    html += `<div class="result-row">
-      <div class="result-row-icon">⚡</div>
-      <div class="result-row-label">Ускоритель <span style="opacity:0.7;font-size:11px;">${r.acceleratorId}</span></div>
-      <div><span class="result-row-value">${fmtVal(r.accelerator)}</span> <span class="result-row-unit">г</span></div>
-    </div>`;
-  }
-
-  if (r.retarder > 0) {
-    const rtd = THINNERS[r.retarderId] || { name: r.retarderId };
-    html += `<div class="result-row">
-      <div class="result-row-icon">🐢</div>
-      <div class="result-row-label">Замедлитель <span style="opacity:0.7;font-size:11px;">${rtd.name}</span></div>
-      <div><span class="result-row-value">${fmtVal(r.retarder)}</span> <span class="result-row-unit">г</span></div>
-    </div>`;
-  }
-
-  html += `</div>
-  <div class="result-total">
-    <div class="result-total-label">ИТОГО смеси</div>
-    <div class="result-total-value">${fmt(r.total)}</div>
-  </div>`;
-
-  if (r.coveredArea) {
-    html += `<div style="font-size:13px;opacity:0.75;margin-top:8px;text-align:center;">
-      ≈ покроет ${r.coveredArea} м² при расходе ${mat.coverage} г/м²
-    </div>`;
-  }
-
-  html += `</div>`;
-
-  // Диаграмма состава
-  const total = r.total || 1;
-  html += `<div class="card" style="margin-top:10px;">
-    <div class="card-title">📊 Состав смеси</div>
-    <div class="composition-bar">
-      <div class="comp-segment comp-base" style="width:${(r.base/total*100).toFixed(1)}%"></div>
-      <div class="comp-segment comp-hardener" style="width:${(r.hardener/total*100).toFixed(1)}%"></div>
-      <div class="comp-segment comp-thinner" style="width:${(r.thinner/total*100).toFixed(1)}%"></div>
-      <div class="comp-segment comp-accelerator" style="width:${(r.accelerator/total*100).toFixed(1)}%"></div>
-      <div class="comp-segment comp-retarder" style="width:${(r.retarder/total*100).toFixed(1)}%"></div>
+  el.innerHTML = `
+  <div class="result-hero">
+    <div class="rh-label">Готовая смесь</div>
+    <div class="rh-value">${fmt(r.total)}<small>г</small></div>
+    <div class="rh-sub">${esc(heroSub)}</div>
+    <div class="rh-meta">
+      <span class="rh-tag">${esc(mat.code)}</span>
+      <span class="rh-tag">${esc(CHEM_LABELS[mat.chemistry] || mat.chemistry)}</span>
+      <span class="rh-tag">${r.temp}°C</span>
     </div>
-    <div class="comp-legend">
-      <div class="comp-legend-item"><div class="comp-dot comp-base"></div>Основа ${(r.base/total*100).toFixed(0)}%</div>
-      ${r.hardener > 0 ? `<div class="comp-legend-item"><div class="comp-dot comp-hardener"></div>Отвердитель ${(r.hardener/total*100).toFixed(0)}%</div>` : ''}
-      ${r.thinner > 0 ? `<div class="comp-legend-item"><div class="comp-dot comp-thinner"></div>Разбавитель ${(r.thinner/total*100).toFixed(0)}%</div>` : ''}
-      ${r.accelerator > 0 ? `<div class="comp-legend-item"><div class="comp-dot comp-accelerator"></div>Ускоритель ${(r.accelerator/total*100).toFixed(0)}%</div>` : ''}
-      ${r.retarder > 0 ? `<div class="comp-legend-item"><div class="comp-dot comp-retarder"></div>Замедлитель ${(r.retarder/total*100).toFixed(0)}%</div>` : ''}
+  </div>
+
+  <div class="card">
+    <div class="comp-bar">${bar}</div>
+    <div class="comp-list">
+      ${rows.map(x => `
+        <div class="comp-row" data-c="${x.c}">
+          <span class="comp-dot" data-c="${x.c}"></span>
+          <div>
+            <div class="comp-name">${esc(x.name)}</div>
+            <div class="comp-formula">${esc(x.formula)}</div>
+          </div>
+          <div class="comp-amount">${fmt(x.g)}<small>г</small></div>
+        </div>`).join('')}
+    </div>
+
+    <div class="result-total">
+      <span>Итого смеси</span>
+      <span class="rt-val">${fmt(r.total)} г</span>
+    </div>
+
+    ${r.mode === 'area' ? `<div class="result-note">
+      Расход <b>${mat.coverage} г/м²</b> относится к наносимому материалу
+      (основа + отвердитель${r.accelerator > 0 ? ' + ускоритель' : ''}) — это <b>${fmt(r.applied)} г</b>.
+      Разбавитель испаряется и в расход не входит, поэтому итог смеси больше.
+    </div>` : ''}
+
+    <div class="result-actions">
+      <button class="btn btn-outline btn-sm" id="share-btn">Поделиться</button>
+      <button class="btn btn-outline btn-sm" id="copy-btn">Копировать</button>
     </div>
   </div>`;
 
-  // Рекомендации по температуре
-  if (r.adjustments && r.adjustments.length > 0) {
-    html += `<div class="card" style="margin-top:10px;">
-      <div class="card-title">🌡️ Рекомендации — ${r.temp}°C (${getTempZoneName(r.temp)})</div>
-      <div class="adjustments">`;
-    r.adjustments.forEach(adj => {
-      html += `<div class="adjustment-item ${adj.type}">
-        <div class="adjustment-icon">${adj.icon}</div>
-        <div class="adjustment-text">${adj.text}</div>
-      </div>`;
-    });
-    html += `</div></div>`;
-  }
-
-  if (potLifeNote) {
-    html += `<div class="card" style="margin-top:10px;background:var(--warning-light);border-color:#ffcc80;">
-      <div style="color:var(--warning);font-size:13px;">${potLifeNote}</div>
-    </div>`;
-  }
-
-  // Если материал ПЭ — особое предупреждение
-  if (mat.chemistry === 'pe') {
-    html += `<div class="card" style="margin-top:10px;background:var(--danger-light);border-color:#ffcdd2;">
-      <div style="color:var(--danger);font-size:13px;">
-        <strong>⚠️ Полиэфирный материал!</strong><br>
-        EC1/EC2 и EA1 — обязательные компоненты. Работайте в хорошо проветриваемом помещении.
-        Соблюдайте последовательность смешивания: сначала разбавитель, затем отвердитель, в конце ускоритель.
-      </div>
-    </div>`;
-  }
-
-  html += `<div class="flex-row mt-12">
-    <button class="btn btn-outline" onclick="shareResult()">📤 Поделиться</button>
-    <button id="save-btn" class="btn btn-primary" style="flex:1">💾 Сохранить</button>
-  </div>`;
-
-  el.innerHTML = html;
-  document.getElementById('save-btn').addEventListener('click', saveToHistory);
+  el.hidden = false;
   el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  document.getElementById('copy-btn').addEventListener('click', () => copyResult(r, rows));
+  document.getElementById('share-btn').addEventListener('click', () => shareResult(r, rows));
 }
 
-function clearResult() {
-  const el = document.getElementById('calc-result');
-  el.hidden = true;
-  el.innerHTML = '';
-  State.result = null;
+function resultText(r, rows) {
+  return `${r.material.code} — ${trim(r.temp)}°C\n` +
+    rows.map(x => `• ${x.name}: ${fmt(x.g)} г`).join('\n') +
+    `\nИтого: ${fmt(r.total)} г`;
 }
 
-function getTempZoneName(temp) {
-  if (temp < 15) return 'холодно';
-  if (temp <= 25) return 'оптимально';
-  if (temp <= 30) return 'тепло';
-  return 'жарко';
+function copyResult(r, rows) {
+  navigator.clipboard?.writeText(resultText(r, rows))
+    .then(() => showToast('Расчёт скопирован'))
+    .catch(() => showToast('Не удалось скопировать'));
+}
+
+function shareResult(r, rows) {
+  const text = resultText(r, rows);
+  if (navigator.share) {
+    navigator.share({ title: 'Расчёт ' + r.material.code, text }).catch(() => {});
+  } else {
+    copyResult(r, rows);
+  }
+}
+
+// ====== ИНФО О РАСХОДЕ ======
+function updateCoverageInfo() {
+  const el = document.getElementById('coverage-info');
+  const mat = getMaterial();
+  if (!mat) { el.hidden = true; return; }
+
+  const parts = [];
+  if (mat.coverage) parts.push(`Расход <b>${mat.coverage} г/м²</b>`);
+  if (mat.dryResidue) parts.push(`сухой остаток <b>${mat.dryResidue}%</b>`);
+
+  if (State.calc.mode === 'area' && mat.coverage && State.calc.area > 0) {
+    const mix = buildMix(mat, {
+      mode: 'area', hardenerId: State.calc.hardenerId, thinnerId: State.calc.thinnerId,
+      temp: State.calc.temperature, area: State.calc.area, reserve: State.calc.reserve,
+    });
+    parts.push(`на ${trim(State.calc.area)} м² нужно <b>${fmt(mix.applied)} г</b> материала`);
+  }
+
+  if (!parts.length) { el.hidden = true; return; }
+  el.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" style="flex-shrink:0;margin-top:1px"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.2v4M8 4.8h.01"/></svg><span>${parts.join(' · ')}</span>`;
+  el.hidden = false;
+}
+
+// ====== ТЕМПЕРАТУРА ======
+function updateZonePill(temp) {
+  const zone = getTempZone(temp);
+  const labels = { cold: 'Холодно', normal: 'Норма', warm: 'Тепло', hot: 'Жарко' };
+  const pill = document.getElementById('zone-pill');
+  pill.textContent = labels[zone];
+  pill.dataset.zone = zone;
+}
+
+function syncTempChips(temp) {
+  document.querySelectorAll('[data-temp]').forEach(c =>
+    c.classList.toggle('active', Number(c.dataset.temp) === temp));
+}
+
+function updateAdjustments() {
+  const el = document.getElementById('temp-adjustments');
+  const mat = getMaterial();
+  if (!mat) { el.innerHTML = ''; return; }
+  const adj = getTempAdjustments(mat, State.calc.temperature);
+  el.innerHTML = adj.map(a =>
+    `<div class="adj-item" data-kind="${esc(a.type)}">
+       <span class="adj-icon">${a.icon}</span><span>${esc(a.text)}</span>
+     </div>`).join('');
+  if (mat.chemistry === 'pe') populateHardeners();
 }
 
 // ====== ИСТОРИЯ ======
 function getHistory() {
   try {
-    const raw = localStorage.getItem(HISTORY_KEY);
-    const all = raw ? JSON.parse(raw) : [];
-    const now = Date.now();
-    return all.filter(e => now - e.timestamp < HISTORY_TTL);
+    const raw = safeGet(HISTORY_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    const fresh = list.filter(e => Date.now() - e.timestamp < HISTORY_TTL);
+    if (fresh.length !== list.length) safeSet(HISTORY_KEY, JSON.stringify(fresh));
+    return fresh;
   } catch { return []; }
 }
 
-function saveHistory(entries) {
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
+function saveToHistory(r) {
+  const list = getHistory();
+  list.unshift({
+    id: 'h' + r.timestamp,
+    timestamp: r.timestamp,
+    materialId: r.material.id,
+    code: r.material.code,
+    name: getShortName(r.material.name, r.material.code),
+    hardenerId: r.hardenerId, thinnerId: r.thinnerId,
+    base: r.base, hardener: r.hardener, thinner: r.thinner,
+    accelerator: r.accelerator, retarder: r.retarder, total: r.total,
+    temp: r.temp, mode: r.mode, area: r.area, reserve: r.reserve,
+  });
+  safeSet(HISTORY_KEY, JSON.stringify(list.slice(0, 100)));
 }
 
-function saveToHistory() {
-  if (!State.result) {
-    showToast('Сначала выполните расчёт');
-    return;
-  }
-  const history = getHistory();
-  // Лимит 100 записей
-  if (history.length >= 100) history.pop();
-  history.unshift({ ...State.result, id: Date.now().toString() });
-  saveHistory(history);
-  showToast('✅ Сохранено в историю');
-  renderHistory();
+function initHistory() {
+  document.getElementById('clear-history-btn').addEventListener('click', () => {
+    if (!getHistory().length) { showToast('История уже пуста'); return; }
+    if (!confirm('Удалить всю историю расчётов?')) return;
+    safeSet(HISTORY_KEY, '[]');
+    renderHistory();
+    showToast('История очищена');
+  });
 }
 
 function renderHistory() {
+  const list = getHistory();
   const el = document.getElementById('history-list');
-  const history = getHistory();
+  document.getElementById('history-count').textContent = list.length;
+  document.getElementById('history-empty').hidden = list.length > 0;
 
-  if (history.length === 0) {
-    el.innerHTML = `<div class="history-empty">
-      <div class="empty-icon">📋</div>
-      <div>История пуста</div>
-      <div class="text-muted" style="margin-top:6px;">Выполните расчёт и сохраните его</div>
-    </div>`;
-    return;
-  }
+  el.innerHTML = list.map(h => {
+    const figs = [
+      `<span class="hist-fig">основа <b>${fmt(h.base)} г</b></span>`,
+      h.hardener > 0 ? `<span class="hist-fig">${esc(h.hardenerId)} <b>${fmt(h.hardener)} г</b></span>` : '',
+      h.thinner > 0 ? `<span class="hist-fig">${esc(h.thinnerId)} <b>${fmt(h.thinner)} г</b></span>` : '',
+      `<span class="hist-fig">итого <b>${fmt(h.total)} г</b></span>`,
+    ].filter(Boolean).join('');
 
-  const fmt = g => g >= 1000 ? (g/1000).toFixed(2) + ' кг' : Math.round(g) + ' г';
-
-  el.innerHTML = history.map(e => {
-    const mat = e.material;
-    const date = new Date(e.timestamp);
-    const dateStr = date.toLocaleDateString('ru', { day: '2-digit', month: '2-digit' }) +
-      ' ' + date.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
-
-    return `<div class="history-item" data-id="${e.id}" onclick="loadFromHistory('${e.id}')">
-      <button class="history-delete" onclick="deleteHistory(event,'${e.id}')">✕</button>
-      <div class="history-item-header">
-        <div class="history-item-name">${mat.code}</div>
-        <div class="history-item-date">${dateStr}</div>
+    return `<div class="hist-item">
+      <div class="hist-top">
+        <div>
+          <div class="hist-code">${esc(h.code)}</div>
+          <div class="hist-name">${esc(h.name)} · ${h.temp}°C${h.mode === 'area' ? ' · ' + trim(h.area) + ' м²' : ''}</div>
+        </div>
+        <div class="hist-date">${dateText(h.timestamp)}</div>
       </div>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">${getShortName(mat.name, mat.code)}</div>
-      <div class="history-summary">
-        <span class="history-pill">🪣 ${fmt(e.base)}</span>
-        ${e.hardener > 0 ? `<span class="history-pill">⚗️ ${fmt(e.hardener)}</span>` : ''}
-        ${e.thinner > 0 ? `<span class="history-pill">💧 ${fmt(e.thinner)}</span>` : ''}
-        ${e.accelerator > 0 ? `<span class="history-pill">⚡ ${fmt(e.accelerator)}</span>` : ''}
-        <span class="history-pill" style="background:var(--primary);color:#fff;border-color:var(--primary);">= ${fmt(e.total)}</span>
-        ${e.mode === 'area' ? `<span class="history-pill">📐 ${e.area} м²</span>` : ''}
-        <span class="history-pill">🌡️ ${e.temp}°C</span>
+      <div class="hist-figs">${figs}</div>
+      <div class="hist-acts">
+        <button class="btn btn-sm btn-outline" data-repeat="${esc(h.id)}">Повторить</button>
+        <button class="btn btn-sm btn-danger-outline" data-del="${esc(h.id)}">Удалить</button>
       </div>
     </div>`;
   }).join('');
 
-  document.getElementById('history-count').textContent = history.length;
+  el.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+    safeSet(HISTORY_KEY, JSON.stringify(getHistory().filter(e => e.id !== b.dataset.del)));
+    renderHistory();
+    showToast('Запись удалена');
+  }));
+  el.querySelectorAll('[data-repeat]').forEach(b => b.addEventListener('click', () => {
+    const h = getHistory().find(e => e.id === b.dataset.repeat);
+    if (h) repeatCalc(h);
+  }));
 }
 
-function deleteHistory(evt, id) {
-  evt.stopPropagation();
-  const history = getHistory().filter(e => e.id !== id);
-  saveHistory(history);
-  renderHistory();
-}
+function repeatCalc(h) {
+  const mat = getAllMaterials().find(m => m.id === h.materialId);
+  if (!mat) { showToast('Материал больше не доступен'); return; }
 
-function loadFromHistory(id) {
-  const entry = getHistory().find(e => e.id === id);
-  if (!entry) return;
-  // Переходим на калькулятор и показываем результат
-  State.result = entry;
+  State.calc.manufacturer = mat.manufacturer;
+  State.calc.materialId = mat.id;
+  State.calc.temperature = h.temp;
+  State.calc.mode = h.mode;
+  State.calc.area = h.area;
+  State.calc.reserve = h.reserve;
+  State.calc.quantity = h.base;
+  State.calc.unit = 'g';
+
   switchTab('calc');
-  const el = document.getElementById('calc-result');
-  el.hidden = false;
-  renderResult(entry);
-  showToast('Расчёт загружен из истории');
+  populateManufacturers();
+  populateMaterials();
+  document.getElementById('calc-material').value = mat.id;
+  populateHardeners();
+  populateThinners();
+  if (h.hardenerId) { State.calc.hardenerId = h.hardenerId; document.getElementById('calc-hardener').value = h.hardenerId; }
+  if (h.thinnerId) { State.calc.thinnerId = h.thinnerId; document.getElementById('calc-thinner').value = h.thinnerId; }
+
+  const seg = document.getElementById('mode-seg');
+  const idx = h.mode === 'area' ? 1 : 0;
+  seg.dataset.active = String(idx);
+  seg.querySelectorAll('.seg-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  document.getElementById('mode-quantity').hidden = h.mode !== 'quantity';
+  document.getElementById('mode-area').hidden = h.mode !== 'area';
+
+  document.getElementById('calc-temp').value = h.temp;
+  document.getElementById('calc-area').value = h.area;
+  document.getElementById('calc-quantity').value = trim(h.base);
+  document.getElementById('unit-label').textContent = 'г';
+  syncTempChips(h.temp);
+  updateZonePill(h.temp);
+  updateAdjustments();
+  updateCoverageInfo();
+  calculate();
 }
-
-window.deleteHistory = deleteHistory;
-window.loadFromHistory = loadFromHistory;
-
-// ====== ОЧИСТИТЬ ИСТОРИЮ ======
-document.getElementById('clear-history-btn')?.addEventListener('click', () => {
-  if (!confirm('Очистить всю историю?')) return;
-  saveHistory([]);
-  renderHistory();
-});
 
 // ====== БИБЛИОТЕКА ======
 function initLibrary() {
-  // Фильтры
-  document.querySelectorAll('#tab-library .filter-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      State.lib.filter = chip.dataset.filter;
-      document.querySelectorAll('#tab-library .filter-chip').forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-      renderLibrary();
-    });
+  bindChips('.filter-scroll [data-filter]', btn => {
+    State.lib.filter = btn.dataset.filter;
+    renderLibrary();
   });
-
-  // Поиск
-  document.getElementById('lib-search').addEventListener('input', function() {
-    State.lib.search = this.value.toLowerCase().trim();
+  document.getElementById('lib-search').addEventListener('input', function () {
+    State.lib.search = this.value.trim().toLowerCase();
     renderLibrary();
   });
 }
 
 function renderLibrary() {
-  const el = document.getElementById('library-list');
-  let materials = getAllMaterials();
-  const filter = State.lib.filter;
-  const search = State.lib.search;
+  const { filter, search } = State.lib;
+  let list = getAllMaterials();
 
   if (filter !== 'all') {
-    if (['primer', 'lacquer', 'enamel', 'dye', 'converter'].includes(filter)) {
-      materials = materials.filter(m => m.type === filter);
-    } else if (['pu', 'ac', 'pe', 'wb'].includes(filter)) {
-      materials = materials.filter(m => m.chemistry === filter || m.chemistry === 'pu-ac' && filter === 'pu');
-    }
+    list = list.filter(m => filter === 'pe' || filter === 'wb' ? m.chemistry === filter : m.type === filter);
   }
-
   if (search) {
-    materials = materials.filter(m =>
-      m.code.toLowerCase().includes(search) ||
-      m.name.toLowerCase().includes(search) ||
-      (m.description || '').toLowerCase().includes(search)
-    );
+    list = list.filter(m =>
+      m.code.toLowerCase().includes(search) || m.name.toLowerCase().includes(search));
   }
 
-  if (materials.length === 0) {
-    el.innerHTML = `<div class="history-empty">
-      <div class="empty-icon">🔍</div>
-      <div>Ничего не найдено</div>
+  document.getElementById('lib-count').textContent = list.length;
+  document.getElementById('library-empty').hidden = list.length > 0;
+
+  const el = document.getElementById('library-list');
+  el.innerHTML = list.map(m => {
+    const mixRows = [
+      `<div class="mix-row"><span class="comp-dot" data-c="base"></span>${esc(m.code)} (основа)<b>100%</b></div>`,
+      ...(m.hardeners || []).map(h =>
+        `<div class="mix-row"><span class="comp-dot" data-c="hardener"></span>${esc(h.id)}<b>${rangeText(h)}</b></div>`),
+      ...(m.accelerators || []).map(a =>
+        `<div class="mix-row"><span class="comp-dot" data-c="accelerator"></span>${esc(a.id)} (ускоритель)<b>${rangeText(a)}</b></div>`),
+      ...(m.thinners || []).map(t =>
+        `<div class="mix-row"><span class="comp-dot" data-c="thinner"></span>${esc(t.id)}<b>${rangeText(t)}</b></div>`),
+    ].join('');
+
+    return `<div class="lib-card" data-id="${esc(m.id)}">
+      <div class="lib-head">
+        <div class="lib-swatch" data-chem="${esc(m.chemistry)}">${esc(CHEM_SHORT[m.chemistry] || '?')}</div>
+        <div class="lib-info">
+          <div class="lib-code">${esc(m.code)}</div>
+          <div class="lib-desc">${esc(getShortName(m.name, m.code))}</div>
+        </div>
+        <svg class="lib-chev" viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l5 5 5-5"/></svg>
+      </div>
+      <div class="lib-body">
+        ${m.description ? `<div class="lib-text">${esc(m.description)}</div>` : ''}
+        <div class="lib-specs">
+          ${m.coverage ? `<div class="spec"><div class="spec-k">Расход</div><div class="spec-v">${m.coverage} г/м²</div></div>` : ''}
+          ${m.dryResidue ? `<div class="spec"><div class="spec-k">Сухой остаток</div><div class="spec-v">${m.dryResidue}%</div></div>` : ''}
+          <div class="spec"><div class="spec-k">Тип</div><div class="spec-v" style="font-size:13px">${esc(TYPE_LABELS[m.type] || m.type)}</div></div>
+        </div>
+        <div class="lib-mix">${mixRows}</div>
+        ${m.note ? `<div class="result-note">${esc(m.note)}</div>` : ''}
+        <div class="tag-row">
+          <span class="tag" data-t="chem">${esc(CHEM_LABELS[m.chemistry] || m.chemistry)}</span>
+          ${m.outdoor ? '<span class="tag">для улицы</span>' : ''}
+          ${m.thixotropic ? '<span class="tag">тиксотропный</span>' : ''}
+          ${m.chemistry === 'pe' ? '<span class="tag" data-t="warn">нужен ускоритель EA1</span>' : ''}
+        </div>
+        <button class="btn btn-primary btn-sm btn-block" style="margin-top:12px" data-calc="${esc(m.id)}">Рассчитать этот материал</button>
+      </div>
     </div>`;
-    return;
-  }
+  }).join('');
 
-  el.innerHTML = materials.map(m => buildLibCard(m)).join('');
+  el.querySelectorAll('.lib-head').forEach(head =>
+    head.addEventListener('click', () => head.parentElement.classList.toggle('open')));
 
-  // Клики на раскрытие
-  el.querySelectorAll('.lib-material-header').forEach(hdr => {
-    hdr.addEventListener('click', () => {
-      const card = hdr.closest('.lib-material-card');
-      card.classList.toggle('expanded');
-    });
+  el.querySelectorAll('[data-calc]').forEach(btn => btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const mat = getAllMaterials().find(m => m.id === btn.dataset.calc);
+    if (!mat) return;
+    State.calc.manufacturer = mat.manufacturer;
+    State.calc.materialId = mat.id;
+    switchTab('calc');
+    populateManufacturers();
+    populateMaterials();
+    document.getElementById('calc-material').value = mat.id;
+    populateHardeners();
+    populateThinners();
+    updateCoverageInfo();
+    updateAdjustments();
+  }));
+}
+
+// ====== УСТАНОВКА PWA ======
+function initInstall() {
+  let deferred = null;
+  const box = document.getElementById('install-prompt');
+
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferred = e;
+    if (!safeGet('pwaDismissed')) box.hidden = false;
   });
 
-  // Кнопки "Рассчитать"
-  el.querySelectorAll('.lib-calc-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const matId = btn.dataset.matid;
-      switchTab('calc');
-      // Установить материал
-      const matSel = document.getElementById('calc-material');
-      matSel.value = matId;
-      State.calc.materialId = matId;
-      populateHardeners();
-      populateThinners();
-      updateCoverageInfo();
-      showToast('Материал выбран в калькуляторе');
-    });
+  document.getElementById('install-btn').addEventListener('click', async () => {
+    if (!deferred) return;
+    deferred.prompt();
+    await deferred.userChoice;
+    deferred = null;
+    box.hidden = true;
+  });
+
+  document.getElementById('install-dismiss').addEventListener('click', () => {
+    safeSet('pwaDismissed', '1');
+    box.hidden = true;
+  });
+
+  document.getElementById('pw-toggle').addEventListener('click', () => {
+    const inp = document.getElementById('login-password');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
   });
 }
 
-function buildLibCard(m) {
-  const chemLabel = CHEM_LABELS[m.chemistry] || m.chemistry;
-  const typeLabel = TYPE_LABELS[m.type] || m.type;
-
-  let badges = `<span class="material-badge badge-${m.chemistry === 'pu-ac' ? 'pu' : m.chemistry}">${chemLabel}</span>`;
-  if (m.thixotropic) badges += `<span class="material-badge badge-thix">Тиксотроп.</span>`;
-  if (m.fireProtection) badges += `<span class="material-badge badge-fire">Огнезащита</span>`;
-  if (m.outdoor) badges += `<span class="material-badge badge-type">Наружный</span>`;
-
-  let recipeHtml = '';
-  if (m.hardeners && m.hardeners.length > 0) {
-    recipeHtml += m.hardeners.map(h => {
-      const hd = HARDENERS[h.id] || { name: h.id };
-      const ratio = h.ratio ? `${h.ratio}%` : `${h.ratioMin}-${h.ratioMax}%`;
-      return `<div class="lib-recipe-row"><span class="lib-recipe-component">Отвердитель ${hd.name}</span><span class="lib-recipe-ratio">${ratio}</span></div>`;
-    }).join('');
-  }
-  if (m.accelerators && m.accelerators.length > 0) {
-    recipeHtml += m.accelerators.map(a => {
-      return `<div class="lib-recipe-row"><span class="lib-recipe-component">Ускоритель ${a.id}</span><span class="lib-recipe-ratio">${a.ratio}%</span></div>`;
-    }).join('');
-  }
-  if (m.thinners && m.thinners.length > 0) {
-    const td = THINNERS[m.thinners[0].id] || { name: m.thinners[0].id };
-    const ratio = m.thinners[0].ratio ? `${m.thinners[0].ratio}%` : `${m.thinners[0].ratioMin}-${m.thinners[0].ratioMax}%`;
-    recipeHtml += `<div class="lib-recipe-row"><span class="lib-recipe-component">Разбавитель ${td.name}</span><span class="lib-recipe-ratio">${ratio}</span></div>`;
-    if (m.thinners.length > 1) {
-      recipeHtml += `<div class="lib-recipe-row"><span class="lib-recipe-component text-muted">Альт. разбавители</span><span class="lib-recipe-ratio">${m.thinners.slice(1).map(t=>t.id).join(', ')}</span></div>`;
-    }
-  }
-  if (!recipeHtml) {
-    recipeHtml = `<div class="lib-recipe-row"><span class="lib-recipe-component text-muted">Однокомпонентный</span></div>`;
-  }
-
-  const mfName = getAllManufacturers().find(mf => mf.id === m.manufacturer)?.name || m.manufacturer;
-
-  return `
-  <div class="lib-material-card">
-    <div class="lib-material-header">
-      <div class="lib-material-info">
-        <div class="lib-material-code">${m.code}</div>
-        <div class="lib-material-name">${getShortName(m.name, m.code)}</div>
-        <div class="lib-material-type">${typeLabel} · ${chemLabel}</div>
-      </div>
-      <div class="lib-material-arrow">›</div>
-    </div>
-    <div class="lib-material-body">
-      <div class="lib-desc">${m.description || ''}</div>
-      <div style="margin-bottom:10px;">${badges}</div>
-      <div class="lib-props">
-        <div class="lib-prop"><span class="lib-prop-label">Производитель</span><span class="lib-prop-value">${mfName}</span></div>
-        ${m.dryResidue ? `<div class="lib-prop"><span class="lib-prop-label">Сухой остаток</span><span class="lib-prop-value">${m.dryResidue}%</span></div>` : ''}
-        ${m.coverage ? `<div class="lib-prop"><span class="lib-prop-label">Расход</span><span class="lib-prop-value">${m.coverage} г/м²</span></div>` : ''}
-        ${m.gloss ? `<div class="lib-prop"><span class="lib-prop-label">Глянец</span><span class="lib-prop-value">${m.gloss.join(', ')} гл.</span></div>` : ''}
-      </div>
-      <div class="lib-recipe">
-        <div class="lib-recipe-title">📋 Рецептура (на 100г основы)</div>
-        ${recipeHtml}
-        ${m.note ? `<div style="font-size:12px;color:var(--text3);margin-top:8px;">${m.note}</div>` : ''}
-      </div>
-      ${m.variants ? `<div style="margin-top:10px;font-size:12px;color:var(--text2);">
-        <strong>Варианты:</strong> ${m.variants.join(' · ')}
-      </div>` : ''}
-      <button class="btn btn-primary lib-calc-btn btn-sm" data-matid="${m.id}">
-        🧮 Рассчитать этот материал
-      </button>
-    </div>
-  </div>`;
+// ====== УТИЛИТЫ ======
+function getShortName(name, code) {
+  return String(name).replace(new RegExp('^' + code + '\\s*[—–-]\\s*'), '');
 }
 
-// ====== ПОДЕЛИТЬСЯ ======
-function shareResult() {
-  if (!State.result) return;
-  const r = State.result;
-  const fmt = g => Math.round(g) + ' г';
-  const text = `🎨 Расчёт ТехноКолор\n` +
-    `Материал: ${r.material.code}\n` +
-    `Основа: ${fmt(r.base)}\n` +
-    (r.hardener > 0 ? `Отвердитель ${r.hardenerId}: ${fmt(r.hardener)}\n` : '') +
-    (r.thinner > 0 ? `Разбавитель ${r.thinnerId}: ${fmt(r.thinner)}\n` : '') +
-    (r.accelerator > 0 ? `Ускоритель ${r.acceleratorId}: ${fmt(r.accelerator)}\n` : '') +
-    (r.retarder > 0 ? `Замедлитель ${r.retarderId}: ${fmt(r.retarder)}\n` : '') +
-    `Итого: ${fmt(r.total)}\n` +
-    `Температура: ${r.temp}°C`;
-
-  if (navigator.share) {
-    navigator.share({ title: 'Расчёт материалов', text });
-  } else if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).then(() => showToast('📋 Скопировано в буфер'));
-  } else {
-    showToast('Поделиться: ' + text.substring(0, 50) + '...');
-  }
+function fmt(n) {
+  if (n == null || isNaN(n)) return '0';
+  if (n >= 1000) return (Math.round(n * 10) / 10).toLocaleString('ru-RU');
+  if (n >= 100) return String(Math.round(n));
+  return String(Math.round(n * 10) / 10);
 }
-window.shareResult = shareResult;
 
-// ====== TOAST ======
-let toastTimer;
+function trim(n) {
+  return String(Math.round(Number(n) * 100) / 100);
+}
+
+function dateText(ts) {
+  const d = new Date(ts);
+  const today = new Date();
+  const sameDay = d.toDateString() === today.toDateString();
+  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  return sameDay ? 'сегодня ' + time
+    : d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + time;
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function safeGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+function safeSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
+
+let toastTimer = null;
 function showToast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
 }
-window.showToast = showToast;
 
-// ====== SERVICE WORKER ======
 function registerSW() {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  }
+  if (!('serviceWorker' in navigator)) return;
+  if (location.protocol === 'file:') return;
+  navigator.serviceWorker.register('sw.js').catch(() => {});
 }

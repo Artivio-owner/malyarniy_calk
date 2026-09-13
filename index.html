@@ -1,424 +1,319 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#2e7d32">
-  <meta name="description" content="Расчёт лакокрасочных материалов для маляров — МДФ фасады, дерево, покрытия">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Маляр Калк">
-  <link rel="apple-touch-icon" href="icons/icon.svg">
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="css/styles.css">
-  <title>Маляр Калькулятор МДФ</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16a34a">
+<meta name="description" content="Калькулятор ЛКМ для маляров: МДФ фасады, дерево. Расчёт основы, отвердителя и разбавителя.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Маляр Калк">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="css/styles.css">
+<title>Маляр Калькулятор МДФ</title>
 </head>
 <body>
 
-  <!-- ============================================================
-       ЗАГОЛОВОК
-  ============================================================ -->
-  <header id="app-header">
-    <svg viewBox="0 0 36 36" width="30" height="30" aria-hidden="true" style="flex-shrink:0">
-      <rect width="36" height="36" rx="7" fill="#1b5e20"/>
-      <text x="18" y="25" font-family="Arial Black,sans-serif" font-size="12" font-weight="900" fill="#a5d6a7" text-anchor="middle">МЛР</text>
+<header id="app-header">
+  <div class="brand-mark">МЛР</div>
+  <h1>Маляр Калк<span class="version">МДФ · ЛКМ · ТехноКолор</span></h1>
+  <button class="icon-btn" id="theme-btn" aria-label="Сменить тему">
+    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="4.5"/><path d="M12 2v2m0 16v2M4.2 4.2l1.4 1.4m12.8 12.8 1.4 1.4M2 12h2m16 0h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>
     </svg>
-    <h1>Маляр Калк <span class="version">МДФ · ЛКМ</span></h1>
-    <button id="admin-btn" title="Администрирование" aria-label="Открыть панель администратора">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="12" cy="8" r="4"/>
-        <path d="M6 20v-1a6 6 0 0 1 12 0v1"/>
-      </svg>
-    </button>
-  </header>
+  </button>
+  <button class="icon-btn" id="admin-btn" aria-label="Панель администратора">
+    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="8.5" r="3.5"/><path d="M5.5 20v-1a6.5 6.5 0 0 1 13 0v1"/>
+    </svg>
+  </button>
+</header>
 
-  <!-- ============================================================
-       НАВИГАЦИЯ
-  ============================================================ -->
-  <nav id="bottom-nav" role="navigation" aria-label="Разделы приложения">
-    <button class="nav-btn active" data-tab="calc" aria-label="Калькулятор">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <rect x="3" y="3" width="18" height="18" rx="3"/>
-        <path d="M8 7h8M8 12h4m-4 5h8"/>
-      </svg>
-      <span>Расчёт</span>
-    </button>
-    <button class="nav-btn" data-tab="history" aria-label="История расчётов">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="9"/>
-        <path d="M12 7v5l3 3"/>
-      </svg>
-      <span>История</span>
-    </button>
-    <button class="nav-btn" data-tab="library" aria-label="Библиотека материалов">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-      </svg>
-      <span>Библиотека</span>
-    </button>
-  </nav>
+<main id="main-content">
 
-  <!-- ============================================================
-       ОСНОВНОЙ КОНТЕНТ
-  ============================================================ -->
-  <main id="main-content">
+<!-- ============ КАЛЬКУЛЯТОР ============ -->
+<section id="tab-calc" class="tab-panel active" aria-label="Калькулятор">
 
-    <!-- ---- ВКЛАДКА: КАЛЬКУЛЯТОР ---- -->
-    <section id="tab-calc" class="tab-panel active" aria-label="Калькулятор">
-
-      <!-- Режим расчёта -->
-      <div class="card mode-card">
-        <div class="card-title">Режим расчёта</div>
-        <div class="mode-toggle" role="group" aria-label="Выбор режима расчёта">
-          <button class="mode-btn active" data-mode="quantity" type="button">
-            <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 10h14M10 3v14"/></svg>
-            Количество
-          </button>
-          <button class="mode-btn" data-mode="area" type="button">
-            <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="2" width="16" height="16" rx="2"/></svg>
-            Площадь
-          </button>
-        </div>
-      </div>
-
-      <!-- Выбор производителя и материала -->
-      <div class="card">
-        <div class="card-title">Материал</div>
-
-        <div class="field">
-          <label class="field-label" for="calc-manufacturer">Производитель</label>
-          <div class="select-wrap">
-            <select id="calc-manufacturer" class="form-select" aria-label="Производитель">
-              <option value="">— Все производители —</option>
-            </select>
-            <svg class="select-arrow" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>
-          </div>
-        </div>
-
-        <div class="field">
-          <label class="field-label" for="calc-material">Материал</label>
-          <div class="select-wrap">
-            <select id="calc-material" class="form-select" aria-label="Материал">
-              <option value="">— Выберите материал —</option>
-            </select>
-            <svg class="select-arrow" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>
-          </div>
-        </div>
-
-        <div class="field" id="hardener-field">
-          <label class="field-label" for="calc-hardener">Отвердитель</label>
-          <div class="select-wrap">
-            <select id="calc-hardener" class="form-select" aria-label="Отвердитель">
-              <option value="">— Без отвердителя —</option>
-            </select>
-            <svg class="select-arrow" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>
-          </div>
-        </div>
-
-        <div class="field" id="thinner-field">
-          <label class="field-label" for="calc-thinner">Разбавитель</label>
-          <div class="select-wrap">
-            <select id="calc-thinner" class="form-select" aria-label="Разбавитель">
-              <option value="">— Без разбавителя —</option>
-            </select>
-            <svg class="select-arrow" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>
-          </div>
-        </div>
-
-        <!-- Информация о расходе (показывается при выборе материала) -->
-        <div id="coverage-info" class="coverage-info" hidden>
-          <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="8"/><path d="M10 6v4m0 4h.01"/></svg>
-          <span id="coverage-text"></span>
-        </div>
-      </div>
-
-      <!-- Температура -->
-      <div class="card">
-        <div class="card-title">Температура окружающей среды</div>
-        <div class="temp-row">
-          <div class="field" style="flex:1">
-            <div class="input-with-unit">
-              <input type="number" id="calc-temp" class="form-input" value="20" min="-20" max="50" step="1" aria-label="Температура в градусах Цельсия">
-              <span class="input-unit">°C</span>
-            </div>
-          </div>
-          <div class="temp-zone-badge" id="temp-zone-badge">Норма</div>
-        </div>
-        <div class="temp-chips" role="group" aria-label="Быстрый выбор температуры">
-          <button class="temp-chip" data-temp="5" data-zone="cold" type="button">+5°C</button>
-          <button class="temp-chip" data-temp="15" data-zone="normal" type="button">+15°C</button>
-          <button class="temp-chip active" data-temp="20" data-zone="normal" type="button">+20°C</button>
-          <button class="temp-chip" data-temp="25" data-zone="warm" type="button">+25°C</button>
-          <button class="temp-chip" data-temp="32" data-zone="hot" type="button">+32°C</button>
-        </div>
-        <div id="temp-adjustments" class="temp-adjustments"></div>
-      </div>
-
-      <!-- Ввод количества (режим quantity) -->
-      <div class="card" id="mode-quantity">
-        <div class="card-title">Количество основного компонента</div>
-        <div class="input-group">
-          <input type="number" id="calc-quantity" class="form-input" value="100" min="1" step="any" aria-label="Количество основного компонента">
-          <div class="unit-toggle" role="group" aria-label="Единица измерения">
-            <button class="unit-btn active" data-unit="g" type="button">г</button>
-            <button class="unit-btn" data-unit="kg" type="button">кг</button>
-            <button class="unit-btn" data-unit="l" type="button">л</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Ввод площади (режим area) -->
-      <div class="card" id="mode-area" hidden>
-        <div class="card-title">Площадь покрытия</div>
-        <div class="field">
-          <div class="input-with-unit">
-            <input type="number" id="calc-area" class="form-input" value="1" min="0.01" step="0.01" aria-label="Площадь в квадратных метрах">
-            <span class="input-unit">м²</span>
-          </div>
-        </div>
-        <div class="field">
-          <label class="field-label">Запас материала</label>
-          <div class="reserve-toggle" role="group" aria-label="Процент запаса">
-            <button class="reserve-btn" data-reserve="0" type="button">Без запаса</button>
-            <button class="reserve-btn active" data-reserve="10" type="button">+10%</button>
-            <button class="reserve-btn" data-reserve="15" type="button">+15%</button>
-            <button class="reserve-btn" data-reserve="20" type="button">+20%</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Кнопка расчёта -->
-      <div class="calc-action">
-        <button id="calc-btn" class="btn btn-primary btn-lg" type="button">
-          <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 6l8 8 8-8"/></svg>
-          Рассчитать
-        </button>
-      </div>
-
-      <!-- Результат -->
-      <div id="calc-result" class="calc-result" hidden aria-live="polite"></div>
-
-    </section>
-
-    <!-- ---- ВКЛАДКА: ИСТОРИЯ ---- -->
-    <section id="tab-history" class="tab-panel" aria-label="История расчётов">
-      <div class="section-header">
-        <div class="section-header-title">
-          <h2>История расчётов</h2>
-          <span id="history-count" class="badge">0</span>
-        </div>
-        <button id="clear-history-btn" class="btn btn-sm btn-danger-outline" type="button">
-          Очистить
-        </button>
-      </div>
-
-      <div class="history-info">
-        <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="8"/><path d="M10 6v4m0 4h.01"/></svg>
-        История хранится 30 дней только на этом устройстве
-      </div>
-
-      <div id="history-list" class="history-list"></div>
-
-      <div id="history-empty" class="empty-state" hidden>
-        <div class="empty-icon">
-          <svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4" aria-hidden="true"><circle cx="24" cy="24" r="20"/><path d="M24 14v10l6 6"/></svg>
-        </div>
-        <p>История пуста</p>
-        <p class="empty-sub">Расчёты будут сохраняться автоматически</p>
-      </div>
-    </section>
-
-    <!-- ---- ВКЛАДКА: БИБЛИОТЕКА ---- -->
-    <section id="tab-library" class="tab-panel" aria-label="Библиотека материалов">
-      <div class="search-bar">
-        <div class="search-wrap">
-          <svg class="search-icon" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M13 13l3 3"/></svg>
-          <input type="search" id="lib-search" class="form-search" placeholder="Поиск по коду или названию…" aria-label="Поиск материалов">
-        </div>
-      </div>
-
-      <div class="filter-chips" role="group" aria-label="Фильтр по типу">
-        <button class="filter-chip active" data-filter="all" type="button">Все</button>
-        <button class="filter-chip" data-filter="primer" type="button">Грунты</button>
-        <button class="filter-chip" data-filter="lacquer" type="button">Лаки</button>
-        <button class="filter-chip" data-filter="enamel" type="button">Эмали</button>
-        <button class="filter-chip" data-filter="polyester" type="button">Полиэфир</button>
-        <button class="filter-chip" data-filter="waterbased" type="button">Водные</button>
-        <button class="filter-chip" data-filter="dye" type="button">Красители</button>
-      </div>
-
-      <div id="library-list" class="library-list"></div>
-
-      <div id="library-empty" class="empty-state" hidden>
-        <div class="empty-icon">
-          <svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4" aria-hidden="true"><path d="M4 42v-2a10 10 0 0 1 20 0v2"/><path d="M28 42v-2a10 10 0 0 1 20 0v2"/><circle cx="14" cy="20" r="8"/><circle cx="38" cy="20" r="8"/></svg>
-        </div>
-        <p>Ничего не найдено</p>
-        <p class="empty-sub">Попробуйте изменить запрос или фильтр</p>
-      </div>
-    </section>
-
-  </main>
-
-  <!-- ============================================================
-       ПАНЕЛЬ АДМИНИСТРАТОРА
-  ============================================================ -->
-  <div id="admin-overlay" class="admin-overlay" role="dialog" aria-modal="true" aria-label="Панель администратора">
-    <div class="admin-panel" id="admin-panel">
-      <div class="admin-panel-header">
-        <h2 class="admin-panel-title">Администрирование</h2>
-        <button id="admin-close-btn" class="icon-btn" aria-label="Закрыть панель">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </button>
-      </div>
-
-      <!-- Форма входа -->
-      <div id="admin-login-view">
-        <div class="admin-login-logo">
-          <svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" style="color:var(--primary)">
-            <rect x="8" y="20" width="32" height="22" rx="4" stroke-width="2"/>
-            <path d="M16 20v-6a8 8 0 0 1 16 0v6" stroke-width="2"/>
-            <circle cx="24" cy="32" r="3" fill="currentColor"/>
-          </svg>
-        </div>
-        <p class="admin-login-hint">Вход для администратора</p>
-        <form id="admin-login-form" novalidate>
-          <div class="field">
-            <label class="field-label" for="login-email">Email</label>
-            <input type="email" id="login-email" class="form-input" autocomplete="email" placeholder="Введите логин">
-          </div>
-          <div class="field">
-            <label class="field-label" for="login-password">Пароль</label>
-            <div class="password-wrap">
-              <input type="password" id="login-password" class="form-input" autocomplete="current-password" placeholder="Введите пароль">
-              <button type="button" class="password-toggle" onclick="togglePassword()" aria-label="Показать/скрыть пароль">
-                <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 10s3.5-7 9-7 9 7 9 7-3.5 7-9 7-9-7-9-7z"/><circle cx="10" cy="10" r="3"/></svg>
-              </button>
-            </div>
-          </div>
-          <p id="admin-error" class="form-error" hidden></p>
-          <button type="submit" id="login-submit-btn" class="btn btn-primary btn-block">Войти</button>
-        </form>
-      </div>
-
-      <!-- Содержимое панели (после входа) -->
-      <div id="admin-panel-view" hidden>
-        <div class="admin-actions-row">
-          <span class="admin-welcome">Добро пожаловать</span>
-          <button class="btn btn-sm btn-outline" onclick="adminLogout()">Выход</button>
-        </div>
-
-        <!-- Вкладки -->
-        <div class="admin-tabs" role="tablist">
-          <button class="admin-tab-btn active" data-admintab="materials" role="tab">Материалы</button>
-          <button class="admin-tab-btn" data-admintab="manufacturers" role="tab">Производители</button>
-          <button class="admin-tab-btn" data-admintab="info" role="tab">Информация</button>
-        </div>
-
-        <!-- Раздел: Материалы -->
-        <div id="admin-section-materials" class="admin-section active">
-          <div class="admin-section-actions">
-            <span class="admin-section-title">Список материалов</span>
-            <button class="btn btn-sm btn-primary" onclick="showAddMaterialModal()">+ Добавить</button>
-          </div>
-          <div id="admin-materials-list" class="admin-list"></div>
-        </div>
-
-        <!-- Раздел: Производители -->
-        <div id="admin-section-manufacturers" class="admin-section">
-          <div class="admin-section-actions">
-            <span class="admin-section-title">Производители</span>
-            <button class="btn btn-sm btn-primary" onclick="showAddManufacturerModal()">+ Добавить</button>
-          </div>
-          <div id="admin-manufacturers-list" class="admin-list"></div>
-        </div>
-
-        <!-- Раздел: Информация -->
-        <div id="admin-section-info" class="admin-section">
-          <div id="admin-info-content" class="admin-form"></div>
-        </div>
-      </div>
+  <div class="card">
+    <div class="segmented" id="mode-seg" data-active="0" role="group" aria-label="Режим расчёта">
+      <button class="seg-btn active" data-mode="quantity" type="button">
+        <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h12M4 10h8M4 14h5"/></svg>
+        По массе
+      </button>
+      <button class="seg-btn" data-mode="area" type="button">
+        <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14M8 3v14" opacity=".5"/></svg>
+        По площади
+      </button>
     </div>
   </div>
 
-  <!-- ============================================================
-       МОДАЛЬНОЕ ОКНО
-  ============================================================ -->
-  <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Диалог">
-    <div class="modal-box" id="modal-box">
-      <div class="modal-header">
-        <h3 id="modal-title" class="modal-title"></h3>
-        <button class="icon-btn" onclick="closeModal()" aria-label="Закрыть">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </button>
+  <!-- Материал -->
+  <div class="card">
+    <div class="card-title">Материал</div>
+
+    <div class="field">
+      <label class="field-label" for="calc-manufacturer">Производитель</label>
+      <div class="select-wrap">
+        <select id="calc-manufacturer" class="form-select"></select>
+        <svg class="select-arrow" viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>
       </div>
-      <div id="modal-content" class="modal-content"></div>
-      <div class="modal-actions">
-        <button id="modal-cancel-btn" class="btn btn-outline">Отмена</button>
-        <button id="modal-confirm-btn" class="btn btn-primary">OK</button>
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="calc-material">Материал</label>
+      <div class="select-wrap">
+        <select id="calc-material" class="form-select"><option value="">— Выберите материал —</option></select>
+        <svg class="select-arrow" viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>
       </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label class="field-label" for="calc-hardener">Отвердитель</label>
+        <div class="select-wrap">
+          <select id="calc-hardener" class="form-select"><option value="">—</option></select>
+          <svg class="select-arrow" viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label" for="calc-thinner">Разбавитель</label>
+        <div class="select-wrap">
+          <select id="calc-thinner" class="form-select"><option value="">—</option></select>
+          <svg class="select-arrow" viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div id="coverage-info" class="coverage-info" hidden></div>
+  </div>
+
+  <!-- Режим: по массе -->
+  <div class="card" id="mode-quantity">
+    <div class="card-title">Основной компонент</div>
+    <div class="big-input-wrap">
+      <input type="number" id="calc-quantity" value="100" min="0.1" step="any" inputmode="decimal" aria-label="Количество основного компонента">
+      <span class="big-unit" id="unit-label">г</span>
+    </div>
+    <div class="chip-row" style="margin-top:11px" role="group" aria-label="Единица измерения">
+      <button class="chip active" data-unit="g" type="button">граммы</button>
+      <button class="chip" data-unit="kg" type="button">килограммы</button>
+      <button class="chip" data-unit="l" type="button">литры</button>
     </div>
   </div>
 
-  <!-- ============================================================
-       УВЕДОМЛЕНИЕ (TOAST)
-  ============================================================ -->
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-  <!-- ============================================================
-       КНОПКА УСТАНОВКИ PWA
-  ============================================================ -->
-  <div id="install-prompt" class="install-prompt" hidden>
-    <div class="install-prompt-content">
-      <div class="install-prompt-icon">
-        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      </div>
-      <div class="install-prompt-text">
-        <strong>Установить приложение</strong>
-        <span>Работает без интернета</span>
-      </div>
+  <!-- Режим: по площади -->
+  <div class="card" id="mode-area" hidden>
+    <div class="card-title">Площадь покрытия</div>
+    <div class="big-input-wrap">
+      <input type="number" id="calc-area" value="2" min="0.01" step="any" inputmode="decimal" aria-label="Площадь в квадратных метрах">
+      <span class="big-unit">м²</span>
     </div>
-    <div class="install-prompt-actions">
-      <button id="install-btn" class="btn btn-primary btn-sm">Установить</button>
-      <button id="install-dismiss" class="btn btn-sm btn-outline">Нет</button>
+    <label class="field-label" style="margin-top:14px">Запас материала</label>
+    <div class="chip-row" role="group" aria-label="Запас">
+      <button class="chip" data-reserve="0" type="button">без запаса</button>
+      <button class="chip active" data-reserve="10" type="button">+10%</button>
+      <button class="chip" data-reserve="15" type="button">+15%</button>
+      <button class="chip" data-reserve="20" type="button">+20%</button>
     </div>
   </div>
 
-  <!-- ============================================================
-       СКРИПТЫ
-  ============================================================ -->
-  <script src="js/data.js"></script>
-  <script src="js/app.js"></script>
-  <script src="js/admin.js"></script>
-  <script>
-    // Показать/скрыть пароль
-    function togglePassword() {
-      const inp = document.getElementById('login-password');
-      inp.type = inp.type === 'password' ? 'text' : 'password';
-    }
+  <!-- Температура -->
+  <div class="card">
+    <div class="card-title">Температура в цехе</div>
+    <div class="temp-head">
+      <div class="big-input-wrap">
+        <input type="number" id="calc-temp" value="20" min="-20" max="50" step="1" inputmode="numeric" aria-label="Температура">
+        <span class="big-unit">°C</span>
+      </div>
+      <span class="zone-pill" id="zone-pill" data-zone="normal">Норма</span>
+    </div>
+    <div class="chip-row" role="group" aria-label="Быстрый выбор температуры">
+      <button class="chip" data-temp="10" data-zone="cold" type="button">+10°</button>
+      <button class="chip" data-temp="18" data-zone="normal" type="button">+18°</button>
+      <button class="chip active" data-temp="20" data-zone="normal" type="button">+20°</button>
+      <button class="chip" data-temp="27" data-zone="warm" type="button">+27°</button>
+      <button class="chip" data-temp="33" data-zone="hot" type="button">+33°</button>
+    </div>
+    <div id="temp-adjustments" class="adj-list"></div>
+  </div>
 
-    // PWA установка
-    let deferredPrompt = null;
-    window.addEventListener('beforeinstallprompt', e => {
-      e.preventDefault();
-      deferredPrompt = e;
-      const dismissed = localStorage.getItem('pwaInstallDismissed');
-      if (!dismissed) {
-        document.getElementById('install-prompt').hidden = false;
-      }
-    });
-    document.getElementById('install-btn')?.addEventListener('click', async () => {
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      deferredPrompt = null;
-      document.getElementById('install-prompt').hidden = true;
-    });
-    document.getElementById('install-dismiss')?.addEventListener('click', () => {
-      localStorage.setItem('pwaInstallDismissed', '1');
-      document.getElementById('install-prompt').hidden = true;
-    });
-  </script>
+  <div class="calc-cta">
+    <button id="calc-btn" class="btn btn-primary" type="button">
+      <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v14M3 10h14"/></svg>
+      Рассчитать
+    </button>
+  </div>
+
+  <div id="calc-result" class="result" hidden aria-live="polite"></div>
+</section>
+
+<!-- ============ ИСТОРИЯ ============ -->
+<section id="tab-history" class="tab-panel" aria-label="История">
+  <div class="section-head">
+    <h2>История <span class="count-badge" id="history-count">0</span></h2>
+    <button id="clear-history-btn" class="btn btn-sm btn-danger-outline" type="button">Очистить</button>
+  </div>
+  <div class="hint-line">
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v3.5m0 2.5h.01"/></svg>
+    Хранится 30 дней только на этом устройстве
+  </div>
+  <div id="history-list" class="history-list"></div>
+  <div id="history-empty" class="empty" hidden>
+    <svg viewBox="0 0 48 48" width="52" height="52" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="24" cy="24" r="19"/><path d="M24 13v11l7 5"/></svg>
+    <h3>История пуста</h3>
+    <p>Расчёты сохраняются автоматически</p>
+  </div>
+</section>
+
+<!-- ============ БИБЛИОТЕКА ============ -->
+<section id="tab-library" class="tab-panel" aria-label="Библиотека">
+  <div class="section-head" style="margin-bottom:13px">
+    <h2>Библиотека <span class="count-badge" id="lib-count">0</span></h2>
+  </div>
+  <div class="search-wrap">
+    <svg class="search-icon" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M13 13l4 4"/></svg>
+    <input type="search" id="lib-search" class="form-search" placeholder="Код или название материала…" aria-label="Поиск">
+  </div>
+  <div class="filter-scroll" role="group" aria-label="Фильтр">
+    <button class="chip active" data-filter="all" type="button">Все</button>
+    <button class="chip" data-filter="primer" type="button">Грунты</button>
+    <button class="chip" data-filter="lacquer" type="button">Лаки</button>
+    <button class="chip" data-filter="enamel" type="button">Эмали</button>
+    <button class="chip" data-filter="pe" type="button">Полиэфир</button>
+    <button class="chip" data-filter="wb" type="button">Водные</button>
+    <button class="chip" data-filter="dye" type="button">Красители</button>
+  </div>
+  <div id="library-list" class="library-list"></div>
+  <div id="library-empty" class="empty" hidden>
+    <svg viewBox="0 0 48 48" width="52" height="52" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="21" cy="21" r="14"/><path d="M31 31l11 11"/></svg>
+    <h3>Ничего не найдено</h3>
+    <p>Измените запрос или фильтр</p>
+  </div>
+</section>
+
+</main>
+
+<nav id="bottom-nav" aria-label="Разделы">
+  <button class="nav-btn active" data-tab="calc">
+    <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2.5" width="16" height="19" rx="3"/><path d="M8 7h8M8 12h3m3 0h2M8 16.5h3m3 0h2"/></svg>
+    <span>Расчёт</span>
+  </button>
+  <button class="nav-btn" data-tab="history">
+    <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.4 2.3"/></svg>
+    <span>История</span>
+  </button>
+  <button class="nav-btn" data-tab="library">
+    <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.2A2.2 2.2 0 0 1 6.2 17H20"/><path d="M6.2 2H20v20H6.2A2.2 2.2 0 0 1 4 19.8V4.2A2.2 2.2 0 0 1 6.2 2z"/></svg>
+    <span>Библиотека</span>
+  </button>
+</nav>
+
+<!-- ============ АДМИНКА ============ -->
+<div id="admin-overlay" role="dialog" aria-modal="true" aria-label="Администрирование">
+  <div id="admin-panel">
+    <div class="admin-head">
+      <h2>Администрирование</h2>
+      <button id="admin-close-btn" class="icon-btn" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div id="admin-login-view">
+      <div class="admin-lock">
+        <svg viewBox="0 0 48 48" width="46" height="46" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <rect x="9" y="20" width="30" height="21" rx="5"/><path d="M16 20v-5a8 8 0 0 1 16 0v5"/><circle cx="24" cy="30.5" r="2.6" fill="currentColor" stroke="none"/>
+        </svg>
+      </div>
+      <p class="admin-hint">Доступ только для администратора</p>
+      <form id="admin-login-form" novalidate>
+        <div class="field">
+          <label class="field-label" for="login-email">Email</label>
+          <input type="email" id="login-email" class="form-input" autocomplete="username" placeholder="Логин">
+        </div>
+        <div class="field">
+          <label class="field-label" for="login-password">Пароль</label>
+          <div class="pw-wrap">
+            <input type="password" id="login-password" class="form-input" autocomplete="current-password" placeholder="Пароль">
+            <button type="button" class="pw-toggle" id="pw-toggle" aria-label="Показать пароль">
+              <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M1.5 10S5 3.8 10 3.8 18.5 10 18.5 10 15 16.2 10 16.2 1.5 10 1.5 10z"/><circle cx="10" cy="10" r="2.8"/></svg>
+            </button>
+          </div>
+        </div>
+        <p id="admin-error" class="form-error" hidden></p>
+        <button type="submit" id="login-submit-btn" class="btn btn-primary btn-block">Войти</button>
+      </form>
+    </div>
+
+    <div id="admin-panel-view" hidden>
+      <div class="admin-bar">
+        <span class="admin-user">Вы вошли как администратор</span>
+        <button class="btn btn-sm btn-outline" onclick="adminLogout()">Выйти</button>
+      </div>
+      <div class="admin-tabs" role="tablist">
+        <button class="admin-tab-btn active" data-admintab="materials" role="tab">Материалы</button>
+        <button class="admin-tab-btn" data-admintab="manufacturers" role="tab">Бренды</button>
+        <button class="admin-tab-btn" data-admintab="info" role="tab">Система</button>
+      </div>
+      <div id="admin-section-materials" class="admin-section active">
+        <div class="admin-section-actions">
+          <span class="admin-section-title">Материалы</span>
+          <button class="btn btn-sm btn-primary" onclick="showAddMaterialModal()">+ Добавить</button>
+        </div>
+        <div id="admin-materials-list" class="admin-list"></div>
+      </div>
+      <div id="admin-section-manufacturers" class="admin-section">
+        <div class="admin-section-actions">
+          <span class="admin-section-title">Производители</span>
+          <button class="btn btn-sm btn-primary" onclick="showAddManufacturerModal()">+ Добавить</button>
+        </div>
+        <div id="admin-manufacturers-list" class="admin-list"></div>
+      </div>
+      <div id="admin-section-info" class="admin-section">
+        <div id="admin-info-content"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ МОДАЛКА ============ -->
+<div id="modal-overlay" role="dialog" aria-modal="true">
+  <div id="modal-box">
+    <div class="modal-header">
+      <h3 id="modal-title" class="modal-title"></h3>
+      <button class="icon-btn" onclick="closeModal()" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="modal-content"></div>
+    <div class="modal-actions">
+      <button id="modal-cancel-btn" class="btn btn-outline">Отмена</button>
+      <button id="modal-confirm-btn" class="btn btn-primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<div id="install-prompt" hidden>
+  <div class="ip-row">
+    <div class="ip-icon">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>
+    </div>
+    <div class="ip-text">
+      <strong>Установить приложение</strong>
+      <span>Работает без интернета</span>
+    </div>
+  </div>
+  <div class="ip-acts">
+    <button id="install-btn" class="btn btn-sm btn-primary">Установить</button>
+    <button id="install-dismiss" class="btn btn-sm btn-outline">Позже</button>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script src="js/admin.js"></script>
 </body>
 </html>
