@@ -37,20 +37,24 @@
 <section id="tab-calc" class="tab-panel active" aria-label="Калькулятор">
 
   <div class="card">
-    <div class="segmented" id="mode-seg" data-active="0" role="group" aria-label="Режим расчёта">
+    <div class="segmented" id="mode-seg" data-active="0" style="--seg-count:3" role="group" aria-label="Режим расчёта">
       <button class="seg-btn active" data-mode="quantity" type="button">
         <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h12M4 10h8M4 14h5"/></svg>
-        По массе
+        Масса
       </button>
       <button class="seg-btn" data-mode="area" type="button">
         <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14M8 3v14" opacity=".5"/></svg>
-        По площади
+        Площадь
+      </button>
+      <button class="seg-btn" data-mode="custom" type="button">
+        <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 15V9m6 6V5m6 10v-4"/></svg>
+        Свой
       </button>
     </div>
   </div>
 
   <!-- Материал -->
-  <div class="card">
+  <div class="card" id="card-material">
     <div class="card-title">Материал</div>
 
     <div class="field">
@@ -119,6 +123,28 @@
     </div>
   </div>
 
+  <!-- Режим: произвольный -->
+  <div class="card" id="mode-custom" hidden>
+    <div class="card-title">Свои пропорции</div>
+    <div class="field-row">
+      <div class="field">
+        <label class="field-label" for="custom-hardener">Отвердитель, %</label>
+        <div class="pct-wrap">
+          <input type="number" id="custom-hardener" class="form-input" value="50" min="0" max="1000" step="any" inputmode="decimal">
+          <span class="pct-sign">%</span>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label" for="custom-thinner">Разбавитель, %</label>
+        <div class="pct-wrap">
+          <input type="number" id="custom-thinner" class="form-input" value="20" min="0" max="2000" step="any" inputmode="decimal">
+          <span class="pct-sign">%</span>
+        </div>
+      </div>
+    </div>
+    <p class="field-hint">Проценты считаются от массы основы, указанной выше.</p>
+  </div>
+
   <!-- Температура -->
   <div class="card">
     <div class="card-title">Температура в цехе</div>
@@ -137,6 +163,17 @@
       <button class="chip" data-temp="33" data-zone="hot" type="button">+33°</button>
     </div>
     <div id="temp-adjustments" class="adj-list"></div>
+
+    <label class="check-row" id="subtract-row" hidden>
+      <input type="checkbox" id="subtract-check">
+      <span class="check-box" aria-hidden="true">
+        <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.5 3.5L13 4.5"/></svg>
+      </span>
+      <span class="check-text">
+        <b>Вычесть из разбавителя</b>
+        <span id="subtract-hint">Добавки не увеличат общий объём смеси</span>
+      </span>
+    </label>
   </div>
 
   <div class="calc-cta">

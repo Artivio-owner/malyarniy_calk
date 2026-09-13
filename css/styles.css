@@ -262,14 +262,16 @@ button { font: inherit; color: inherit; }
   content: '';
   position: absolute;
   top: 4px; bottom: 4px; left: 4px;
-  width: calc(50% - 4px);
+  width: calc((100% - 8px) / var(--seg-count, 2));
   border-radius: var(--r-full);
   background: var(--grad);
   box-shadow: var(--sh-accent);
   transition: transform .38s var(--ease);
-  transform: translateX(var(--seg-x, 0));
+  transform: translateX(calc(var(--seg-i, 0) * 100%));
 }
-.segmented[data-active="1"] { --seg-x: 100%; }
+.segmented[data-active="0"] { --seg-i: 0; }
+.segmented[data-active="1"] { --seg-i: 1; }
+.segmented[data-active="2"] { --seg-i: 2; }
 .seg-btn {
   flex: 1; position: relative; z-index: 1;
   border: none; background: none;
@@ -924,3 +926,68 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 18px 0; 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ===== ПРОЦЕНТНОЕ ПОЛЕ ===== */
+.pct-wrap { position: relative; }
+.pct-wrap .form-input { padding-right: 34px; font-family: var(--mono); font-weight: 650; }
+.pct-sign {
+  position: absolute; right: 13px; top: 50%; transform: translateY(-50%);
+  color: var(--text-3); font-weight: 650; pointer-events: none;
+}
+.field-hint { font-size: 12px; color: var(--text-3); margin-top: 10px; line-height: 1.45; }
+
+/* ===== ГАЛОЧКА ===== */
+.check-row {
+  display: flex; align-items: flex-start; gap: 11px;
+  margin-top: 12px; padding: 12px 13px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: border-color .18s var(--ease), background .18s var(--ease);
+}
+.check-row:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.check-row input { position: absolute; opacity: 0; width: 0; height: 0; }
+.check-box {
+  width: 22px; height: 22px; flex-shrink: 0;
+  border: 2px solid var(--border-strong);
+  border-radius: 7px;
+  display: grid; place-items: center;
+  color: transparent;
+  transition: all .18s var(--ease);
+}
+.check-row input:checked + .check-box {
+  background: var(--grad); border-color: transparent; color: #fff;
+}
+.check-row input:focus-visible + .check-box {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.check-text { font-size: 13px; line-height: 1.4; }
+.check-text b { display: block; font-weight: 680; font-size: 13.5px; }
+.check-text span { color: var(--text-3); font-size: 12px; }
+
+/* Предупреждение в заметке результата */
+.result-note[data-warn="1"] {
+  background: var(--warn-soft);
+  border-left-color: var(--c-hardener);
+  color: var(--text);
+}
+
+/* ===== ЗАПАС ОТДЕЛЬНОЙ СТРОКОЙ ===== */
+.comp-seg[data-c="reserve"]  { background: var(--text-3); }
+.comp-dot[data-c="reserve"]  { background: var(--text-3); }
+.comp-row[data-c="reserve"] {
+  border-style: dashed;
+  background: transparent;
+}
+.result-subtotal {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 10px; padding: 11px 15px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  font-size: 13.5px; color: var(--text-2);
+}
+.result-subtotal span:last-child { font-family: var(--mono); font-weight: 680; }

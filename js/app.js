@@ -39,6 +39,8 @@ const State = {
     manufacturer: '', materialId: '', hardenerId: '', thinnerId: '',
     quantity: 100, unit: 'g',
     area: 2, reserve: 10, temperature: 20,
+    hRatioCustom: 50, tRatioCustom: 20,
+    subtract: false,
   },
   lib: { filter: 'all', search: '' },
   result: null,
@@ -95,10 +97,7 @@ function initCalc() {
       seg.dataset.active = String(i);
       seg.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      // hidden-атрибут, а не style.display — иначе карточка не покажется
-      document.getElementById('mode-quantity').hidden = btn.dataset.mode !== 'quantity';
-      document.getElementById('mode-area').hidden = btn.dataset.mode !== 'area';
-      updateCoverageInfo();
+      applyMode(btn.dataset.mode);
     });
   });
 
@@ -153,8 +152,58 @@ function initCalc() {
     updateCoverageInfo();
   });
 
+  bindNumber('custom-hardener', v => { State.calc.hRatioCustom = v; });
+  bindNumber('custom-thinner', v => { State.calc.tRatioCustom = v; });
+
+  document.getElementById('subtract-check').addEventListener('change', function () {
+    State.calc.subtract = this.checked;
+    updateCoverageInfo();
+  });
+
   document.getElementById('calc-btn').addEventListener('click', calculate);
   updateZonePill(State.calc.temperature);
+  updateSubtractRow();
+}
+
+// Галочка нужна, только когда есть что вычитать
+function updateSubtractRow() {
+  const c = State.calc;
+  const mat = c.mode === 'custom' ? CUSTOM_CHEM : getMaterial();
+  if (!mat) { document.getElementById('subtract-row').hidden = true; return; }
+
+  const ret = retarderInfo(mat, c.temperature);
+  const acc = c.mode === 'custom' ? 0 : accelRatio(mat, c.temperature);
+  const additions = [];
+  if (ret) additions.push(`замедлитель ${ret.ratio}%`);
+  if (acc) additions.push(`ускоритель ${acc}%`);
+
+  const row = document.getElementById('subtract-row');
+  row.hidden = additions.length === 0;
+  if (additions.length) {
+    document.getElementById('subtract-hint').textContent =
+      `Сейчас сверх разбавителя: ${additions.join(', ')} от основы`;
+  }
+}
+
+// Какие карточки видны в каждом режиме
+function applyMode(mode) {
+  // hidden-атрибут, а не style.display — иначе карточка не покажется
+  document.getElementById('card-material').hidden = mode === 'custom';
+  document.getElementById('mode-quantity').hidden = mode === 'area';
+  document.getElementById('mode-area').hidden = mode !== 'area';
+  document.getElementById('mode-custom').hidden = mode !== 'custom';
+  updateCoverageInfo();
+  updateAdjustments();
+  updateSubtractRow();
+}
+
+function syncModeButtons(mode) {
+  const order = ['quantity', 'area', 'custom'];
+  const idx = Math.max(0, order.indexOf(mode));
+  const seg = document.getElementById('mode-seg');
+  seg.dataset.active = String(idx);
+  seg.querySelectorAll('.seg-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  applyMode(mode);
 }
 
 function bindNumber(id, cb) {
@@ -289,22 +338,32 @@ function retarderInfo(mat, temp) {
 
 // ====== ЯДРО РАСЧЁТА ======
 function buildMix(mat, opts) {
-  const { hardenerId, thinnerId, temp } = opts;
+  const { temp } = opts;
+  const custom = opts.mode === 'custom';
 
-  const hInfo = hardenerId ? (mat.hardeners || []).find(h => h.id === hardenerId) : null;
-  const tInfo = thinnerId ? (mat.thinners || []).find(t => t.id === thinnerId) : null;
+  const hardenerId = custom ? '' : opts.hardenerId;
+  const thinnerId = custom ? '' : opts.thinnerId;
 
-  const hRatio = ratioOf(hInfo);
-  const tRatio = ratioOf(tInfo);
-  const aRatio = accelRatio(mat, temp);
-  const ret = retarderInfo(mat, temp);
-  // замедлитель — часть растворителя, а не добавка сверх него
-  const rRatio = ret ? Math.min(ret.ratio, tRatio || ret.ratio) : 0;
-  const pureThinnerRatio = Math.max(0, tRatio - rRatio);
-  // Материал может идти без разбавления (доля 0), но замедлитель при жаре
-  // всё равно добавляется — считаем фактический растворитель, иначе
-  // в режиме площади сумма превысит расход.
-  const solventRatio = pureThinnerRatio + rRatio;
+  const hInfo = custom ? null : (opts.hardenerId ? (mat.hardeners || []).find(h => h.id === opts.hardenerId) : null);
+  const tInfo = custom ? null : (opts.thinnerId ? (mat.thinners || []).find(t => t.id === opts.thinnerId) : null);
+
+  const hRatio = custom ? Math.max(0, opts.hRatio || 0) : ratioOf(hInfo);
+  const tRatio = custom ? Math.max(0, opts.tRatio || 0) : ratioOf(tInfo);
+  const aRatio = custom ? 0 : accelRatio(mat, temp);
+
+  // Замедлитель добавляется СВЕРХ отвердителя и разбавителя — по указанию
+  // производителя. Каталог (стр. 19) относит S100 к разбавителям с очень
+  // низкой скоростью испарения, но долю и способ ввода не задаёт.
+  // Сходится с диапазонами: у PTS20700 разбавитель 20–30%, рабочие 20%
+  // плюс 10% замедлителя как раз дают верхнюю границу.
+  const ret = retarderInfo(custom ? CUSTOM_CHEM : mat, temp);
+  const rRatio = ret ? ret.ratio : 0;
+
+  // Галочка «вычесть из разбавителя»: добавки забираются из доли
+  // разбавителя, и общий объём смеси не растёт.
+  const deduct = !!opts.subtract && (rRatio > 0 || aRatio > 0);
+  const thinnerRatio = deduct ? Math.max(0, tRatio - rRatio - aRatio) : tRatio;
+  const solventRatio = thinnerRatio + rRatio;
 
   // Основа
   let baseG;
@@ -313,7 +372,9 @@ function buildMix(mat, opts) {
     // ГОТОВОЙ РАБОЧЕЙ СМЕСИ, всего что проходит через краскопульт.
     // (Где имеется в виду только основа, каталог пишет «часть А».)
     // Поэтому подбираем основу так, чтобы вся смесь дала нужный расход.
-    const mixNeeded = mat.coverage * opts.area * (1 + opts.reserve / 100);
+    // Запас в основу НЕ закладываем: компоненты считаются на чистую
+    // площадь, а запас выводится отдельной строкой от итоговой суммы.
+    const mixNeeded = mat.coverage * opts.area;
     baseG = mixNeeded / (1 + hRatio / 100 + solventRatio / 100 + aRatio / 100);
   } else {
     baseG = opts.quantity * UNIT_MUL[opts.unit];
@@ -323,28 +384,58 @@ function buildMix(mat, opts) {
   const hardenerG = baseG * hRatio / 100;
   const acceleratorG = baseG * aRatio / 100;
   const retarderG = baseG * rRatio / 100;
-  const thinnerG = baseG * pureThinnerRatio / 100;
+  const thinnerG = baseG * thinnerRatio / 100;
 
   const appliedG = baseG + hardenerG + acceleratorG;
-  const totalG = appliedG + thinnerG + retarderG;
+  const mixG = appliedG + thinnerG + retarderG;
+
+  // Запас — процент от ИТОГОВОЙ суммы смеси, отдельной строкой
+  const reservePct = opts.mode === 'area' ? (opts.reserve || 0) : 0;
+  const reserveG = mixG * reservePct / 100;
+  const totalG = mixG + reserveG;
+
+  // Верхняя граница разбавления по паспорту — предупреждаем о переразбавлении
+  const tMax = tInfo ? (tInfo.ratioMax != null ? tInfo.ratioMax : tInfo.ratio) : null;
 
   return {
     base: baseG, hardener: hardenerG, thinner: thinnerG,
     accelerator: acceleratorG, retarder: retarderG,
-    applied: appliedG, total: totalG,
-    hRatio, tRatio: pureThinnerRatio, aRatio, rRatio,
+    applied: appliedG, mix: mixG, reserve: reserveG, reservePct, total: totalG,
+    hRatio, tRatio: thinnerRatio, tRatioInput: tRatio, aRatio, rRatio, solventRatio, deducted: deduct,
+    overThinned: tMax != null && solventRatio > tMax + 0.01, thinnerMax: tMax,
     hardenerId, thinnerId,
     acceleratorId: aRatio ? mat.accelerators[0].id : '',
     retarderId: rRatio ? ret.id : '',
-    coveredArea: mat.coverage ? totalG / mat.coverage : null,
+    coveredArea: mat && mat.coverage ? mixG / mat.coverage : null,
   };
 }
 
+// Для произвольного режима материала нет — берём правила ПУ/акрила,
+// они для замедлителя одинаковы.
+const CUSTOM_CHEM = { chemistry: 'pu', hardeners: [] };
+
 function calculate() {
+  const c = State.calc;
+
+  if (c.mode === 'custom') {
+    if (!(c.quantity > 0)) { showToast('Укажите количество основы'); return; }
+    const mix = buildMix(null, {
+      mode: 'custom', temp: c.temperature, subtract: c.subtract,
+      quantity: c.quantity, unit: c.unit,
+      hRatio: c.hRatioCustom, tRatio: c.tRatioCustom,
+    });
+    State.result = {
+      ...mix, material: null, mode: 'custom', temp: c.temperature,
+      timestamp: Date.now(),
+    };
+    renderResult(State.result);
+    saveToHistory(State.result);
+    return;
+  }
+
   const mat = getMaterial();
   if (!mat) { showToast('Сначала выберите материал'); return; }
 
-  const c = State.calc;
   if (c.mode === 'area') {
     if (!mat.coverage) { showToast('Для этого материала расход не указан — считайте по массе'); return; }
     if (!(c.area > 0)) { showToast('Укажите площадь'); return; }
@@ -355,12 +446,12 @@ function calculate() {
   const mix = buildMix(mat, {
     mode: c.mode, hardenerId: c.hardenerId, thinnerId: c.thinnerId,
     temp: c.temperature, quantity: c.quantity, unit: c.unit,
-    area: c.area, reserve: c.reserve,
+    area: c.area, reserve: c.reserve, subtract: c.subtract,
   });
 
   State.result = {
     ...mix, material: mat, mode: c.mode, temp: c.temperature,
-    area: c.area, reserve: c.reserve, timestamp: Date.now(),
+    area: c.area, timestamp: Date.now(),
   };
   renderResult(State.result);
   saveToHistory(State.result);
@@ -372,10 +463,10 @@ function renderResult(r) {
   const mat = r.material;
 
   const rows = [
-    { c: 'base', name: mat.code, sub: 'основной компонент', g: r.base, formula: '100% (основа)' },
+    { c: 'base', name: mat ? mat.code : 'Основа', g: r.base, formula: '100% (основа)' },
   ];
   if (r.hardener > 0) rows.push({
-    c: 'hardener', name: 'Отвердитель ' + r.hardenerId, g: r.hardener,
+    c: 'hardener', name: ('Отвердитель ' + (r.hardenerId || '')).trim(), g: r.hardener,
     formula: `${fmt(r.base)} × ${r.hRatio}% = ${fmt(r.hardener)}`,
   });
   if (r.accelerator > 0) rows.push({
@@ -383,7 +474,7 @@ function renderResult(r) {
     formula: `${fmt(r.base)} × ${r.aRatio}% = ${fmt(r.accelerator)}`,
   });
   if (r.thinner > 0) rows.push({
-    c: 'thinner', name: 'Разбавитель ' + r.thinnerId, g: r.thinner,
+    c: 'thinner', name: ('Разбавитель ' + (r.thinnerId || '')).trim(), g: r.thinner,
     formula: `${fmt(r.base)} × ${r.tRatio}% = ${fmt(r.thinner)}`,
   });
   if (r.retarder > 0) rows.push({
@@ -391,12 +482,30 @@ function renderResult(r) {
     formula: `${fmt(r.base)} × ${r.rRatio}% = ${fmt(r.retarder)}`,
   });
 
-  const bar = rows.map(x =>
-    `<div class="comp-seg" data-c="${x.c}" style="width:${(x.g / r.total * 100).toFixed(2)}%"></div>`).join('');
+  // Запас считается от итоговой суммы смеси и стоит отдельной строкой
+  const mixRows = rows.slice();
+  if (r.reserve > 0) rows.push({
+    c: 'reserve', name: `Запас ${r.reservePct}%`, g: r.reserve,
+    formula: `${fmt(r.mix)} × ${r.reservePct}% = ${fmt(r.reserve)}`,
+  });
 
-  const heroSub = r.mode === 'area'
-    ? `${trim(r.area)} м² · расход ${mat.coverage} г/м²${r.reserve ? ' · запас ' + r.reserve + '%' : ''}`
-    : `${trim(r.base >= 1000 ? r.base / 1000 : r.base)} ${r.base >= 1000 ? 'кг' : 'г'} основы${r.coveredArea ? ' · хватит на ' + trim(r.coveredArea.toFixed(2)) + ' м²' : ''}`;
+  const bar = mixRows.map(x =>
+    `<div class="comp-seg" data-c="${x.c}" style="width:${(x.g / r.mix * 100).toFixed(2)}%"></div>`).join('');
+
+  let heroSub;
+  if (r.mode === 'area') {
+    heroSub = `${trim(r.area)} м² · расход ${mat.coverage} г/м²${r.reservePct ? ' · запас ' + r.reservePct + '%' : ''}`;
+  } else if (r.mode === 'custom') {
+    heroSub = `${fmt(r.base)} г основы · отвердитель ${r.hRatio}% · разбавитель ${r.tRatioInput}%`;
+  } else {
+    heroSub = `${trim(r.base >= 1000 ? r.base / 1000 : r.base)} ${r.base >= 1000 ? 'кг' : 'г'} основы` +
+      (r.coveredArea ? ' · хватит на ' + trim(r.coveredArea.toFixed(2)) + ' м²' : '');
+  }
+
+  const tags = mat
+    ? `<span class="rh-tag">${esc(mat.code)}</span>
+       <span class="rh-tag">${esc(CHEM_LABELS[mat.chemistry] || mat.chemistry)}</span>`
+    : '<span class="rh-tag">Произвольный расчёт</span>';
 
   el.innerHTML = `
   <div class="result-hero">
@@ -404,8 +513,7 @@ function renderResult(r) {
     <div class="rh-value">${fmt(r.total)}<small>г</small></div>
     <div class="rh-sub">${esc(heroSub)}</div>
     <div class="rh-meta">
-      <span class="rh-tag">${esc(mat.code)}</span>
-      <span class="rh-tag">${esc(CHEM_LABELS[mat.chemistry] || mat.chemistry)}</span>
+      ${tags}
       <span class="rh-tag">${r.temp}°C</span>
     </div>
   </div>
@@ -424,10 +532,29 @@ function renderResult(r) {
         </div>`).join('')}
     </div>
 
+    ${r.reserve > 0 ? `<div class="result-subtotal">
+      <span>Смесь на ${trim(r.area)} м²</span>
+      <span>${fmt(r.mix)} г</span>
+    </div>` : ''}
+
     <div class="result-total">
-      <span>Итого смеси</span>
+      <span>${r.reserve > 0 ? 'Итого с запасом' : 'Итого смеси'}</span>
       <span class="rt-val">${fmt(r.total)} г</span>
     </div>
+
+    ${(r.retarder > 0 || r.accelerator > 0) ? `<div class="result-note">
+      ${r.deducted
+        ? `Добавки <b>вычтены из разбавителя</b>: ${r.tRatioInput}% − ${round1(r.tRatioInput - r.tRatio)}% = ${r.tRatio}%.
+           Общий объём смеси не вырос.`
+        : `${r.retarder > 0 ? `Замедлитель <b>${esc(r.retarderId)}</b>` : `Ускоритель <b>${esc(r.acceleratorId)}</b>`}
+           добавляется <b>сверх</b> отвердителя и разбавителя.`}
+      ${r.rRatio > 0 ? `Весь растворитель: ${r.tRatio}% + ${r.rRatio}% = <b>${r.solventRatio}%</b>${r.thinnerMax != null ? ` при паспортных до ${r.thinnerMax}%` : ''}.` : ''}
+    </div>` : ''}
+
+    ${r.overThinned ? `<div class="result-note" data-warn="1">
+      Растворителя ${r.solventRatio}% — выше паспортных ${r.thinnerMax}%.
+      Уменьшите разбавитель или замедлитель, иначе возможны потёки и потеря укрывистости.
+    </div>` : ''}
 
     <div class="result-actions">
       <button class="btn btn-outline btn-sm" id="share-btn">Поделиться</button>
@@ -443,7 +570,7 @@ function renderResult(r) {
 }
 
 function resultText(r, rows) {
-  return `${r.material.code} — ${trim(r.temp)}°C\n` +
+  return `${r.material ? r.material.code : 'Свой расчёт'} — ${trim(r.temp)}°C\n` +
     rows.map(x => `• ${x.name}: ${fmt(x.g)} г`).join('\n') +
     `\nИтого: ${fmt(r.total)} г`;
 }
@@ -477,8 +604,11 @@ function updateCoverageInfo() {
     const mix = buildMix(mat, {
       mode: 'area', hardenerId: State.calc.hardenerId, thinnerId: State.calc.thinnerId,
       temp: State.calc.temperature, area: State.calc.area, reserve: State.calc.reserve,
+      subtract: State.calc.subtract,
     });
-    parts.push(`на ${trim(State.calc.area)} м² нужно <b>${fmt(mix.total)} г</b> смеси`);
+    parts.push(mix.reserve > 0
+      ? `на ${trim(State.calc.area)} м² — <b>${fmt(mix.mix)} г</b> смеси плюс запас ${mix.reservePct}% = <b>${fmt(mix.total)} г</b>`
+      : `на ${trim(State.calc.area)} м² нужно <b>${fmt(mix.mix)} г</b> смеси`);
   }
 
   if (!parts.length) { el.hidden = true; return; }
@@ -502,14 +632,15 @@ function syncTempChips(temp) {
 
 function updateAdjustments() {
   const el = document.getElementById('temp-adjustments');
-  const mat = getMaterial();
-  if (!mat) { el.innerHTML = ''; return; }
+  const mat = State.calc.mode === 'custom' ? CUSTOM_CHEM : getMaterial();
+  if (!mat) { el.innerHTML = ''; updateSubtractRow(); return; }
   const adj = getTempAdjustments(mat, State.calc.temperature);
   el.innerHTML = adj.map(a =>
     `<div class="adj-item" data-kind="${esc(a.type)}">
        <span class="adj-icon">${a.icon}</span><span>${esc(a.text)}</span>
      </div>`).join('');
   if (mat.chemistry === 'pe') populateHardeners();
+  updateSubtractRow();
 }
 
 // ====== ИСТОРИЯ ======
@@ -529,13 +660,14 @@ function saveToHistory(r) {
   list.unshift({
     id: 'h' + r.timestamp,
     timestamp: r.timestamp,
-    materialId: r.material.id,
-    code: r.material.code,
-    name: getShortName(r.material.name, r.material.code),
+    materialId: r.material ? r.material.id : '',
+    code: r.material ? r.material.code : 'Свой расчёт',
+    name: r.material ? getShortName(r.material.name, r.material.code) : 'произвольные пропорции',
+    hRatio: r.hRatio, tRatio: r.tRatio, subtract: r.deducted,
     hardenerId: r.hardenerId, thinnerId: r.thinnerId,
     base: r.base, hardener: r.hardener, thinner: r.thinner,
     accelerator: r.accelerator, retarder: r.retarder, total: r.total,
-    temp: r.temp, mode: r.mode, area: r.area, reserve: r.reserve,
+    temp: r.temp, mode: r.mode, area: r.area, reserve: r.reservePct,
   });
   safeSet(HISTORY_KEY, JSON.stringify(list.slice(0, 100)));
 }
@@ -592,6 +724,26 @@ function renderHistory() {
 }
 
 function repeatCalc(h) {
+  if (h.mode === 'custom') {
+    Object.assign(State.calc, {
+      mode: 'custom', temperature: h.temp, quantity: h.base, unit: 'g',
+      hRatioCustom: h.hRatio, tRatioCustom: h.tRatio, subtract: !!h.subtract,
+    });
+    switchTab('calc');
+    syncModeButtons('custom');
+    document.getElementById('calc-quantity').value = trim(h.base);
+    document.getElementById('unit-label').textContent = 'г';
+    document.getElementById('custom-hardener').value = h.hRatio;
+    document.getElementById('custom-thinner').value = h.tRatio;
+    document.getElementById('subtract-check').checked = !!h.subtract;
+    document.getElementById('calc-temp').value = h.temp;
+    syncTempChips(h.temp);
+    updateZonePill(h.temp);
+    updateAdjustments();
+    calculate();
+    return;
+  }
+
   const mat = getAllMaterials().find(m => m.id === h.materialId);
   if (!mat) { showToast('Материал больше не доступен'); return; }
 
@@ -613,17 +765,14 @@ function repeatCalc(h) {
   if (h.hardenerId) { State.calc.hardenerId = h.hardenerId; document.getElementById('calc-hardener').value = h.hardenerId; }
   if (h.thinnerId) { State.calc.thinnerId = h.thinnerId; document.getElementById('calc-thinner').value = h.thinnerId; }
 
-  const seg = document.getElementById('mode-seg');
-  const idx = h.mode === 'area' ? 1 : 0;
-  seg.dataset.active = String(idx);
-  seg.querySelectorAll('.seg-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
-  document.getElementById('mode-quantity').hidden = h.mode !== 'quantity';
-  document.getElementById('mode-area').hidden = h.mode !== 'area';
+  syncModeButtons(h.mode);
 
   document.getElementById('calc-temp').value = h.temp;
   document.getElementById('calc-area').value = h.area;
   document.getElementById('calc-quantity').value = trim(h.base);
   document.getElementById('unit-label').textContent = 'г';
+  State.calc.subtract = !!h.subtract;
+  document.getElementById('subtract-check').checked = !!h.subtract;
   syncTempChips(h.temp);
   updateZonePill(h.temp);
   updateAdjustments();
@@ -759,6 +908,10 @@ function fmt(n) {
   if (n >= 1000) return (Math.round(n * 10) / 10).toLocaleString('ru-RU');
   if (n >= 100) return String(Math.round(n));
   return String(Math.round(n * 10) / 10);
+}
+
+function round1(n) {
+  return Math.round(n * 10) / 10;
 }
 
 function trim(n) {
