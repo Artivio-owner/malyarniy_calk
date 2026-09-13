@@ -429,12 +429,6 @@ function renderResult(r) {
       <span class="rt-val">${fmt(r.total)} г</span>
     </div>
 
-    ${r.mode === 'area' ? `<div class="result-note">
-      Расход <b>${mat.coverage} г/м²</b> по каталогу — это готовая рабочая смесь
-      целиком. ${trim(r.area)} м² × ${mat.coverage} г/м²${r.reserve ? ` + ${r.reserve}% запаса` : ''}
-      = <b>${fmt(r.total)} г</b> смеси, которую и разложили на компоненты.
-    </div>` : ''}
-
     <div class="result-actions">
       <button class="btn btn-outline btn-sm" id="share-btn">Поделиться</button>
       <button class="btn btn-outline btn-sm" id="copy-btn">Копировать</button>
@@ -800,5 +794,17 @@ function showToast(msg) {
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   if (location.protocol === 'file:') return;
+
+  // Была ли страница уже под управлением воркера: при самой первой
+  // установке перезагружать нечего.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    reloaded = true;
+    location.reload();
+  });
+
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
