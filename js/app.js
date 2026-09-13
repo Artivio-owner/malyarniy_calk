@@ -160,7 +160,7 @@ function initCalc() {
     updateCoverageInfo();
   });
 
-  document.getElementById('calc-btn').addEventListener('click', calculate);
+  document.getElementById('calc-btn').addEventListener('click', () => calculate(true));
   updateZonePill(State.calc.temperature);
   updateSubtractRow();
 }
@@ -414,7 +414,7 @@ function buildMix(mat, opts) {
 // они для замедлителя одинаковы.
 const CUSTOM_CHEM = { chemistry: 'pu', hardeners: [] };
 
-function calculate() {
+function calculate(save = true) {
   const c = State.calc;
 
   if (c.mode === 'custom') {
@@ -429,7 +429,7 @@ function calculate() {
       timestamp: Date.now(),
     };
     renderResult(State.result);
-    saveToHistory(State.result);
+    if (save) saveToHistory(State.result);
     return;
   }
 
@@ -454,7 +454,7 @@ function calculate() {
     area: c.area, timestamp: Date.now(),
   };
   renderResult(State.result);
-  saveToHistory(State.result);
+  if (save) saveToHistory(State.result);
 }
 
 // ====== ВЫВОД РЕЗУЛЬТАТА ======
@@ -740,7 +740,7 @@ function repeatCalc(h) {
     syncTempChips(h.temp);
     updateZonePill(h.temp);
     updateAdjustments();
-    calculate();
+    calculate(false);
     return;
   }
 
@@ -777,7 +777,7 @@ function repeatCalc(h) {
   updateZonePill(h.temp);
   updateAdjustments();
   updateCoverageInfo();
-  calculate();
+  calculate(false);
 }
 
 // ====== БИБЛИОТЕКА ======
@@ -857,6 +857,11 @@ function renderLibrary() {
     if (!mat) return;
     State.calc.manufacturer = mat.manufacturer;
     State.calc.materialId = mat.id;
+    // в произвольном режиме карточки материала нет — возвращаем режим массы
+    if (State.calc.mode === 'custom') {
+      State.calc.mode = 'quantity';
+      syncModeButtons('quantity');
+    }
     switchTab('calc');
     populateManufacturers();
     populateMaterials();
