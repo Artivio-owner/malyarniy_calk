@@ -9,7 +9,7 @@
 
 'use strict';
 
-const CACHE_NAME = 'malyar-calc-v3';
+const CACHE_NAME = 'malyar-calc-v5';
 
 const PRECACHE_URLS = [
   './',
